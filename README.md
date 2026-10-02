@@ -26,10 +26,12 @@ tgju.org live rates   updated 14:24:19   every 10s   connected
 Requires Python 3.9 or newer.
 
 ```sh
-git clone https://github.com/<your-username>/tgju-rates.git
+git clone https://github.com/moxart/tgju-rates.git
 cd tgju-rates
 pip install .
 ```
+
+On distributions that mark the system Python as externally managed (recent Ubuntu, Debian, Fedora), plain `pip install` refuses to run. Install with `pipx install .` instead, or inside a virtual environment.
 
 You can also run it from the source tree without installing: `PYTHONPATH=src python3 -m tgju_rates`.
 
