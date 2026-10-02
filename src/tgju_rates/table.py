@@ -1,22 +1,27 @@
 """Rendering the rates as an aligned, optionally coloured text table."""
 
 from tgju_rates.ansi import BOLD, DOWN, END_CELL, FLAT, HEADER_STYLE, RESET, STRIPE, UP
-from tgju_rates.currencies import display_code, english_name, to_toman
+from tgju_rates.currencies import change_in_toman, display_code, english_name, rial_to_toman, to_toman
 from tgju_rates.tracking import TREND_POINTS
 
 BASE_HEADER = ("CODE", "NAME", "PRICE (RIAL)", "TOMAN", "CHANGE", "LOW", "HIGH")
+# With --toman, toman leads and rial becomes the secondary column.
+TOMAN_HEADER = ("CODE", "NAME", "PRICE (TOMAN)", "RIAL", "CHANGE", "LOW", "HIGH")
 # One entry per base column above, so adding or reordering a column means updating all four.
 COLUMN_STYLES = (
     f"{BOLD}\033[38;5;81m",  # code: cyan
     None,  # name: terminal's default text colour
     BOLD,  # price (rial): terminal's default text colour, bold
-    "\033[38;5;179m",  # toman: muted gold
+    "\033[38;5;179m",  # secondary unit (toman, or rial with --toman): muted gold
     None,  # change: green / red / grey by direction, see change_style()
     FLAT,  # low
     FLAT,  # high
 )
 COLUMN_ALIGNS = "<<>>>>>"
 PRICE_COLUMN, CHANGE_COLUMN = 2, 4
+
+# The ▲/▼ marker before each row is fixed width.
+MARKER_WIDTH = 3
 
 SPARK_BLOCKS = "▁▂▃▄▅▆▇█"
 COLUMN_GAP = "  "
@@ -50,27 +55,33 @@ def change_style(change):
     return UP if value > 0 else DOWN if value < 0 else FLAT
 
 
-def render_table(rates, *, color, persian=False, tracker=None, now=0.0):
+def base_row(rate, toman):
+    code, name = display_code(rate["key"]), english_name(rate["key"])
+    if not toman:
+        return [code, name, rate["price"], to_toman(rate["price"]), rate["change"], rate["low"], rate["high"]]
+    return [
+        code,
+        name,
+        to_toman(rate["price"]),
+        rate["price"],
+        change_in_toman(rate["change"]),
+        to_toman(rate["low"]),
+        to_toman(rate["high"]),
+    ]
+
+
+def render_table(rates, *, color, persian=False, toman=False, tracker=None, now=0.0):
     """Return the table as a string.
+
+    With ``toman``, prices, change, low and high are in toman and the rial price is the second column.
 
     With a ``tracker`` (live mode), recently moved prices get a ▲/▼ marker and a TREND column is
     added. With ``persian``, the Persian names go in a last column, so right-to-left text doesn't
     break the alignment of the columns before it.
     """
-    header = list(BASE_HEADER)
+    header = list(TOMAN_HEADER if toman else BASE_HEADER)
     aligns = COLUMN_ALIGNS
-    rows = [
-        [
-            display_code(rate["key"]),
-            english_name(rate["key"]),
-            rate["price"],
-            to_toman(rate["price"]),
-            rate["change"],
-            rate["low"],
-            rate["high"],
-        ]
-        for rate in rates
-    ]
+    rows = [base_row(rate, toman) for rate in rates]
     if tracker is not None:
         header.append("TREND")
         aligns += "<"
@@ -94,8 +105,8 @@ def render_table(rates, *, color, persian=False, tracker=None, now=0.0):
         return COLUMN_GAP.join(cells)
 
     header_styles = [HEADER_STYLE] * len(header) if color else None
-    rule = "-" * (sum(widths) + len(COLUMN_GAP) * len(widths) + 1)
-    lines = [("   " + line(header, header_styles)).rstrip(), rule]
+    rule = "-" * (sum(widths) + len(COLUMN_GAP) * len(widths) + MARKER_WIDTH - 2)
+    lines = [(" " * MARKER_WIDTH + line(header, header_styles)).rstrip(), rule]
     for index, (rate, row) in enumerate(zip(rates, rows)):
         styles = list(COLUMN_STYLES)
         if tracker is not None:
@@ -116,4 +127,80 @@ def render_table(rates, *, color, persian=False, tracker=None, now=0.0):
             lines.append(f"{stripe}{marker}{line(row, styles)} {RESET}")
         else:
             lines.append((marker + line(row)).rstrip())
+    return "\n".join(lines)
+
+
+HOLDINGS_HEADER = ("YOUR SAVINGS", "AMOUNT", "WORTH", "SINCE BOUGHT", "TODAY")
+HOLDINGS_ALIGNS = "<>>>>"
+
+
+def format_count(amount):
+    return f"{int(amount):,}" if amount == int(amount) else f"{amount:,.4f}".rstrip("0")
+
+
+def percent_cell(value):
+    """A percentage with its direction, e.g. "▲ +32.2%"; "" when unknown."""
+    if value is None:
+        return ""
+    arrow = "▲ " if value > 0 else "▼ " if value < 0 else "  "
+    return f"{arrow}{value:+.1f}%"
+
+
+def percent_style(value):
+    return FLAT if not value else UP if value > 0 else DOWN
+
+
+def render_holdings(valuation, *, color, toman=False, trend=()):
+    """The savings panel: what each holding is worth now, its gain since bought, and today's move."""
+    unit = "TOMAN" if toman else "RIAL"
+
+    def amount(rial):
+        if rial is None:
+            return "-"
+        return f"{rial_to_toman(rial) if toman else rial:,}"
+
+    header = list(HOLDINGS_HEADER)
+    header[2] = f"WORTH ({unit})"
+    rows = [
+        (
+            [
+                display_code(position.holding.key),
+                format_count(position.holding.amount),
+                amount(position.worth),
+                percent_cell(position.gain_percent),
+                percent_cell(position.today_percent),
+            ],
+            (position.gain_percent, position.today_percent),
+        )
+        for position in valuation.positions
+    ]
+    total = [
+        "TOTAL",
+        "",
+        amount(valuation.worth),
+        percent_cell(valuation.gain_percent),
+        percent_cell(valuation.today_percent),
+    ]
+    rows.append((total, (valuation.gain_percent, valuation.today_percent)))
+    widths = [max(len(row[i]) for row in (header, *(cells for cells, _ in rows))) for i in range(len(header))]
+
+    def line(cells, styles):
+        padded = [
+            cell.ljust(width) if align == "<" else cell.rjust(width)
+            for cell, width, align in zip(cells, widths, HOLDINGS_ALIGNS)
+        ]
+        if color:
+            padded = [f"{style}{cell}{END_CELL}" if style else cell for style, cell in zip(styles, padded)]
+        return " " * MARKER_WIDTH + COLUMN_GAP.join(padded)
+
+    lines = [line(header, [HEADER_STYLE] * len(header))]
+    for index, (cells, (gain, today)) in enumerate(rows):
+        is_total = index == len(rows) - 1
+        code_style = f"{BOLD}" if is_total else COLUMN_STYLES[0]
+        worth_style = BOLD if is_total else None
+        text = line(cells, [code_style, FLAT, worth_style, percent_style(gain), percent_style(today)])
+        if is_total and len(trend) >= 2:
+            spark = sparkline(list(trend))
+            text += COLUMN_GAP + (f"{trend_style(list(trend))}{spark}{END_CELL}" if color else spark)
+        lines.append(text.rstrip())
     return "\n".join(lines)

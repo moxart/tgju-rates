@@ -20,6 +20,12 @@ class PriceTracker:
         # key -> deque of the last TREND_POINTS distinct prices
         self.trends = {}
 
+    def load_trends(self, trends):
+        """Start the sparklines from saved history ({key: [prices, oldest first]})."""
+        for key, prices in trends.items():
+            if prices:
+                self.trends[key] = deque(prices, maxlen=TREND_POINTS)
+
     def update(self, rates, now):
         for rate in rates:
             key = rate["key"]
@@ -27,7 +33,8 @@ class PriceTracker:
             if old is not None and new is not None and new != old:
                 self.last_moves[key] = ("up" if new > old else "down", now)
             # Only changes are recorded, so the sparkline shows movement rather than a long flat line.
-            if new is not None and new != old:
+            trend = self.trends.get(key)
+            if new is not None and (not trend or trend[-1] != new):
                 self.trends.setdefault(key, deque(maxlen=TREND_POINTS)).append(new)
             self.previous_prices[key] = new
 

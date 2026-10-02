@@ -21,6 +21,11 @@ class CliTest(unittest.TestCase):
             build_parser().parse_args(["--alert", "usd=5"])
         self.assertIn("is not an alert", stderr.getvalue())
 
+    def test_bad_hold_is_a_usage_error(self):
+        with redirect_stderr(StringIO()) as stderr, self.assertRaises(SystemExit):
+            build_parser().parse_args(["--hold", "usd"])
+        self.assertIn("is not a holding", stderr.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

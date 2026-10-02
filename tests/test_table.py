@@ -1,7 +1,8 @@
 import unittest
 
 from tgju_rates.ansi import DOWN, FLAT, UP
-from tgju_rates.table import change_style, render_table, sparkline, trend_style
+from tgju_rates.holdings import Holding, value_holdings
+from tgju_rates.table import change_style, render_holdings, render_table, sparkline, trend_style
 from tgju_rates.tracking import HIGHLIGHT_SECONDS, PriceTracker
 
 
@@ -60,6 +61,17 @@ class RenderTableTest(unittest.TestCase):
         self.assertIn("▁█", fresh[2])
         self.assertTrue(stale[2].startswith("   "))
 
+    def test_toman_leads_and_converts_change_low_high(self):
+        row = rate("price_eur", "2,923,500", change="(-0.5%) -14,500")
+        row["low"], row["high"] = "2,885,300", "2,926,400"
+        header, _, line = render_table([row], color=False, toman=True).split("\n")
+
+        self.assertLess(header.index("PRICE (TOMAN)"), header.index("RIAL"))
+        self.assertEqual(
+            line.split(),
+            ["EUR", "Euro", "292,350", "2,923,500", "(-0.5%)", "-1,450", "288,530", "292,640"],
+        )
+
     def test_persian_column_is_last(self):
         header = render_table([rate("price_eur", "1")], color=False, persian=True).split("\n")[0]
         self.assertTrue(header.endswith("PERSIAN"))
@@ -67,6 +79,26 @@ class RenderTableTest(unittest.TestCase):
     def test_columns_line_up(self):
         lines = render_table([rate("price_eur", "1"), rate("price_gbp", "3,000,000")], color=False).split("\n")
         self.assertEqual(lines[2].index("Euro"), lines[3].index("British Pound"))
+
+
+class RenderHoldingsTest(unittest.TestCase):
+    def valuation(self):
+        rates = [rate("price_eur", "3,000,000", "(1%) 30,000"), rate("price_gbp", "4,000,000", "(-2%) -80,000")]
+        return value_holdings([Holding("price_eur", 2, 2000000), Holding("price_gbp", 0.25)], rates)
+
+    def test_rows_and_total(self):
+        lines = render_holdings(self.valuation(), color=False).split("\n")
+        self.assertEqual(lines[0].split(), ["YOUR", "SAVINGS", "AMOUNT", "WORTH", "(RIAL)", "SINCE", "BOUGHT", "TODAY"])
+        self.assertEqual(lines[1].split(), ["EUR", "2", "6,000,000", "▲", "+50.0%", "▲", "+1.0%"])
+        self.assertEqual(lines[2].split(), ["GBP", "0.25", "1,000,000", "▼", "-2.0%"])
+        self.assertEqual(lines[3].split()[:2], ["TOTAL", "7,000,000"])
+        self.assertEqual(lines[1].index("6,000,000"), lines[3].index("7,000,000"))
+
+    def test_toman_and_trend(self):
+        text = render_holdings(self.valuation(), color=False, toman=True, trend=[1, 3, 2])
+        self.assertIn("WORTH (TOMAN)", text)
+        self.assertIn("700,000", text)
+        self.assertTrue(text.endswith("▁█▅"))
 
 
 if __name__ == "__main__":

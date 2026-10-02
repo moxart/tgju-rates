@@ -1,4 +1,11 @@
-"""Currency codes, English names and rial price formatting."""
+"""Currency codes, English names and rial/toman price formatting."""
+
+import re
+
+RIAL_PER_TOMAN = 10
+UNIT_NAMES = {False: "rial", True: "toman"}
+# A change cell like "(-0.8%) -23,500": percent, then the amount in rial.
+CHANGE_PATTERN = re.compile(r"^\((-?[\d.]+)%\)\s*(-?[\d,]+)$")
 
 # The site's key for the US dollar isn't its ISO code, so accept "usd" as well.
 CODE_ALIASES = {"usd": "dollar_rl"}
@@ -65,6 +72,39 @@ def parse_rial(text):
     return int(digits) if digits.isdigit() else None
 
 
+def rial_to_toman(rial):
+    """Convert a whole rial amount, rounding toward zero so a fall and a rise of the same size match."""
+    toman = abs(rial) // RIAL_PER_TOMAN
+    return -toman if rial < 0 else toman
+
+
 def to_toman(rial_text):
     rial = parse_rial(rial_text)
-    return f"{rial // 10:,}" if rial is not None else "-"
+    return f"{rial_to_toman(rial):,}" if rial is not None else "-"
+
+
+def format_amount(rial, toman=False):
+    """Format a rial amount as "2,584,650 rial", or "258,465 toman" with ``toman``."""
+    amount = rial_to_toman(rial) if toman else rial
+    return f"{amount:,} {UNIT_NAMES[toman]}"
+
+
+def parse_change(text):
+    """Parse a change cell into (percent, rial amount); returns None if it isn't in the usual form."""
+    match = CHANGE_PATTERN.match(text.strip())
+    if not match:
+        return None
+    percent, amount = match.groups()
+    try:
+        return float(percent), int(amount.replace(",", ""))
+    except ValueError:
+        return None
+
+
+def change_in_toman(text):
+    """Rewrite a change cell's amount in toman; anything unparseable is left as it is."""
+    parsed = parse_change(text)
+    if parsed is None:
+        return text
+    percent, amount = parsed
+    return f"({percent:g}%) {rial_to_toman(amount):,}"
