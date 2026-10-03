@@ -70,3 +70,14 @@ class History:
         return self._db.execute(
             "SELECT time, price FROM prices WHERE key = ? AND time >= ? ORDER BY time", (key, start)
         ).fetchall()
+
+    def last_before(self, key, start):
+        """The (time, price) in effect just before ``start``, or None if nothing was saved earlier."""
+        return self._db.execute(
+            "SELECT time, price FROM prices WHERE key = ? AND time < ? ORDER BY time DESC LIMIT 1", (key, start)
+        ).fetchone()
+
+    def latest(self):
+        """{key: (time, price)} with the last saved price of every key, for when tgju.org can't be reached."""
+        rows = self._db.execute("SELECT key, MAX(time), price FROM prices GROUP BY key")
+        return {key: (time, price) for key, time, price in rows}

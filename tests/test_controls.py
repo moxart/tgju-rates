@@ -24,6 +24,14 @@ def codes(rates):
 
 
 class LiveControlsTest(unittest.TestCase):
+    def test_a_cycles_animations_through_off_and_says_so(self):
+        controls = LiveControls(animation="board")
+        press(controls, "a")
+        self.assertEqual(controls.animation, "off")
+        self.assertIn("animation: off", controls.describe())
+        press(controls, "a")
+        self.assertEqual(controls.animation, "flash")
+
     def test_toggles_toman_and_pause(self):
         controls = LiveControls(toman=True)
         press(controls, "tp")

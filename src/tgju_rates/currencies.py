@@ -2,6 +2,8 @@
 
 import re
 
+from tgju_rates.markets import INSTRUMENTS, KEY_BY_CODE
+
 RIAL_PER_TOMAN = 10
 UNIT_NAMES = {False: "rial", True: "toman"}
 # A change cell like "(-0.8%) -23,500": percent, then the amount in rial.
@@ -49,17 +51,30 @@ ENGLISH_NAMES = {
     "price_kgs": "Kyrgyzstani Som",
     "price_tjs": "Tajikistani Somoni",
     "price_tmt": "Turkmenistani Manat",
+    **{item.key: item.name for item in INSTRUMENTS.values()},
 }
+# The site prices a few currencies per 100 units; the converter divides by this.
+UNIT_SIZE = {"price_jpy": 100}
 
 
 def row_key(code):
-    """Turn a user-typed code like "eur" or "usd" into the site's row key."""
+    """Turn a user-typed code like "eur", "usd" or "emami" into the site's row key."""
     code = code.strip().lower()
+    if code in KEY_BY_CODE:
+        return KEY_BY_CODE[code]
     return "price_" + CODE_ALIASES.get(code, code)
 
 
 def display_code(key):
+    if key in INSTRUMENTS:
+        return INSTRUMENTS[key].code.upper()
     return key.removeprefix("price_").upper()
+
+
+def known_codes():
+    """Every code this program knows without asking the site, for completion and error messages."""
+    codes = {display_code(key).lower() for key in ENGLISH_NAMES}
+    return sorted(codes - {CODE_ALIASES["usd"]} | set(CODE_ALIASES))
 
 
 def english_name(key):

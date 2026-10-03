@@ -2,7 +2,8 @@
 
 The currency page is scraped once for the list of currencies and their Persian names.
 Prices are then polled from the JSON feed the site uses for its own live updates.
-Both sources key each currency by the same row key, e.g. ``price_eur``.
+Both sources key each currency by the same row key, e.g. ``price_eur``. Gold coins, gold and crypto
+aren't scraped: their rows are built from the feed and the list in markets.py.
 """
 
 import json
@@ -10,6 +11,9 @@ import time
 from html.parser import HTMLParser
 from urllib.request import Request, urlopen
 
+from tgju_rates.markets import CURRENCY, FEED_MARKETS
+
+SITE_NAME = "tgju.org"
 PAGE_URL = "https://www.tgju.org/currency"
 FEED_URL = "https://call1.tgju.org/ajax.json"
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
@@ -70,6 +74,47 @@ def parse_page_rates(html):
 
 def scrape_page_rates():
     return parse_page_rates(fetch(PAGE_URL))
+
+
+def feed_market_rates(markets, live):
+    """Rows for the feed-only markets, in their listed order. An entry the feed lacks is left out."""
+    rates = [
+        {"key": item.key, "name": item.persian, "price": "-", "change": "-", "low": "-", "high": "-", "time": ""}
+        for market in markets
+        for item in FEED_MARKETS[market]
+        if item.key in live
+    ]
+    apply_live_prices(rates, live)
+    return rates
+
+
+def load_markets(markets):
+    """Fetch the starting rows of each market: the page for currencies, the feed for the rest.
+
+    Returns ({market: rates}, {market: error}), so a broken page doesn't stop the feed markets and the
+    other way round. A market with no rows counts as failed.
+    """
+    loaded, errors = {}, {}
+    if CURRENCY in markets:
+        try:
+            loaded[CURRENCY] = scrape_page_rates()
+        except OSError as error:
+            errors[CURRENCY] = f"could not fetch {PAGE_URL}: {error}"
+        else:
+            if not loaded[CURRENCY]:
+                errors[CURRENCY] = f"no rates found on {PAGE_URL}; the page layout may have changed"
+    feed_markets = [market for market in markets if market != CURRENCY]
+    if feed_markets:
+        try:
+            live = fetch_live_prices()
+        except (OSError, ValueError, KeyError) as error:
+            errors.update((market, f"could not read the feed: {error}") for market in feed_markets)
+        else:
+            for market in feed_markets:
+                loaded[market] = feed_market_rates([market], live)
+                if not loaded[market]:
+                    errors[market] = f"the feed has no {market} prices"
+    return {market: rates for market, rates in loaded.items() if market not in errors}, errors
 
 
 def fetch_live_prices():

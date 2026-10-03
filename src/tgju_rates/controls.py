@@ -1,12 +1,13 @@
-"""What the keyboard can change in live mode: unit, sort order, filter, pause."""
+"""What the keyboard can change in live mode: unit, sort order, filter, animation, pause."""
 
+from tgju_rates.animation import ANIMATIONS, DEFAULT_ANIMATION
 from tgju_rates.currencies import display_code, english_name, parse_change, parse_rial
 from tgju_rates.keys import ESCAPE
 
 SORT_MODES = ("site order", "biggest move", "price")
 BACKSPACE = ("\x7f", "\b")
 ENTER = ("\r", "\n")
-KEY_HELP = "t toman/rial  s sort  / filter  p pause  q quit"
+KEY_HELP = "t toman/rial  s sort  / filter  a animation  p pause  q quit"
 
 
 def move_size(rate):
@@ -22,8 +23,9 @@ def price_value(rate):
 class LiveControls:
     """Holds the view state and changes it one key at a time."""
 
-    def __init__(self, toman=False):
+    def __init__(self, toman=False, animation=DEFAULT_ANIMATION):
         self.toman = toman
+        self.animation = self.start_animation = animation
         self.sort = 0
         self.filter = ""
         self.editing = False
@@ -37,6 +39,8 @@ class LiveControls:
             self.toman = not self.toman
         elif key == "s":
             self.sort = (self.sort + 1) % len(SORT_MODES)
+        elif key == "a":
+            self.animation = ANIMATIONS[(ANIMATIONS.index(self.animation) + 1) % len(ANIMATIONS)]
         elif key == "/":
             self.editing = True
         elif key == ESCAPE:
@@ -78,6 +82,9 @@ class LiveControls:
         parts = []
         if self.sort:
             parts.append(f"sorted by {SORT_MODES[self.sort]}")
+        # Shown once changed, so cycling with "a" says which effect is now on.
+        if self.animation != self.start_animation:
+            parts.append(f"animation: {self.animation}")
         if self.editing:
             parts.append(f"filter: {self.filter}_  (Enter to keep, Esc to clear)")
         elif self.filter:

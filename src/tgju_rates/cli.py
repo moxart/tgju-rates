@@ -1,17 +1,23 @@
 """Command-line entry point: ``tgju-rates`` or ``python -m tgju_rates``."""
 
 import argparse
+import os
 import signal
 import sqlite3
 import sys
 
 from tgju_rates import __version__
 from tgju_rates.alerts import TOTAL_KEY, parse_alert
-from tgju_rates.app import Options, run_history, run_live, run_once
+from tgju_rates.animation import ANIMATIONS, DEFAULT_ANIMATION
+from tgju_rates.app import HISTORY_VIEWS, Options, run_history, run_live, run_once, saved_rates
+from tgju_rates.completion import SHELLS, completion_script
+from tgju_rates.convert import parse_conversion, run_convert
 from tgju_rates.currencies import display_code, row_key
+from tgju_rates.doctor import run_doctor
 from tgju_rates.history import History, default_path
 from tgju_rates.holdings import default_holdings_path, load_holdings, merge_holdings, parse_holding
-from tgju_rates.source import PAGE_URL, scrape_page_rates
+from tgju_rates.markets import CURRENCY, FEED_MARKETS, market_of, parse_markets
+from tgju_rates.source import apply_live_prices, fetch_live_prices, load_markets
 
 DEFAULT_INTERVAL = 10
 MIN_INTERVAL = 3
@@ -35,8 +41,33 @@ def hold_argument(text):
     return text
 
 
+def market_argument(text):
+    try:
+        return parse_markets(text)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from None
+
+
+def convert_argument(text):
+    try:
+        parse_conversion(text)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from None
+    return text
+
+
+def market_codes_epilog():
+    lines = [f"{market:<7} {', '.join(item.code for item in items)}" for market, items in FEED_MARKETS.items()]
+    return "codes beyond currencies:\n  " + "\n  ".join(lines)
+
+
 def build_parser():
-    parser = argparse.ArgumentParser(prog="tgju-rates", description="Live currency rates from tgju.org")
+    parser = argparse.ArgumentParser(
+        prog="tgju-rates",
+        description="Live currency, gold coin, gold and crypto rates from tgju.org",
+        epilog=market_codes_epilog(),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "-i",
         "--interval",
@@ -51,7 +82,23 @@ def build_parser():
         "--json", action="store_true", help="print JSON instead of a table (one JSON object per update when live)"
     )
     parser.add_argument(
-        "--watch", metavar="CODES", help="comma-separated currency codes to show, in this order (e.g. usd,eur,gbp)"
+        "--animation",
+        choices=ANIMATIONS,
+        default=DEFAULT_ANIMATION,
+        help="effect on a price that just changed, in live mode in a terminal: flash (background), glow (text), "
+        f"roll (spinning digits), board (roll and flash), or off (default {DEFAULT_ANIMATION}; 'a' cycles them)",
+    )
+    parser.add_argument(
+        "--market",
+        metavar="MARKETS",
+        type=market_argument,
+        default=[CURRENCY],
+        help="comma-separated markets to show: currency, coin, gold, crypto, or all (default currency)",
+    )
+    parser.add_argument(
+        "--watch",
+        metavar="CODES",
+        help="comma-separated codes to show, in this order (e.g. usd,eur,emami); fetches their markets as needed",
     )
     parser.add_argument(
         "--alert",
@@ -84,8 +131,19 @@ def build_parser():
     history = parser.add_argument_group("history", "Prices are saved to a local SQLite file whenever they change.")
     history.add_argument("--history", metavar="CODE", help="list the saved prices of one currency and exit")
     history.add_argument("--days", type=float, default=1, help="how far back --history goes, in days (default 1)")
+    views = history.add_mutually_exclusive_group()
+    views.add_argument("--chart", action="store_true", help="show --history as a chart with a daily summary")
+    views.add_argument("--csv", action="store_true", help="print --history as CSV")
     history.add_argument("--db", metavar="PATH", help=f"history file (default {default_path()})")
     history.add_argument("--no-record", action="store_true", help="don't save prices to the history file")
+    parser.add_argument(
+        "--convert",
+        metavar="TEXT",
+        type=convert_argument,
+        help='convert an amount and exit, e.g. "250 usd", "250 usd eur" or "50,000,000 toman to btc"',
+    )
+    parser.add_argument("--doctor", action="store_true", help="check that tgju.org still works with this program")
+    parser.add_argument("--completion", choices=SHELLS, help="print a shell completion script and exit")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser
 
@@ -100,7 +158,8 @@ def exit_if_unknown(by_key, keys):
     if unknown:
         available = ", ".join(sorted(display_code(key).lower() for key in by_key) + ["usd"])
         sys.exit(
-            f"Unknown currency code: {', '.join(display_code(k).lower() for k in unknown)}\nAvailable: {available}"
+            f"Unknown currency code: {', '.join(display_code(k).lower() for k in unknown)}\nAvailable: {available}\n"
+            + market_codes_epilog()
         )
 
 
@@ -116,16 +175,35 @@ def open_history(path, required):
 
 
 def main(argv=None):
-    args = build_parser().parse_args(argv)
-    options = Options(persian=args.persian, toman=args.toman, json=args.json)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if (args.chart or args.csv) and not args.history:
+        parser.error("--chart and --csv go with --history")
+    options = Options(persian=args.persian, toman=args.toman, json=args.json, animation=args.animation)
     db_path = args.db or default_path()
 
+    if args.completion:
+        print(completion_script(args.completion, parser), end="")
+        return
+    if args.doctor:
+        sys.exit(run_doctor(db_path, args.holdings or default_holdings_path(), color=sys.stdout.isatty()))
     if args.history:
         history = open_history(db_path, required=True)
+        view = HISTORY_VIEWS[1] if args.chart else HISTORY_VIEWS[2] if args.csv else HISTORY_VIEWS[0]
         try:
-            run_history(history, row_key(args.history), args.days, options)
+            run_history(history, row_key(args.history), args.days, options, view=view)
         finally:
             history.close()
+        return
+    if args.convert:
+        history = existing_history(db_path)
+        try:
+            error = run_convert(args.convert, history, as_json=args.json)
+        finally:
+            if history is not None:
+                history.close()
+        if error:
+            sys.exit(error)
         return
 
     # Exit through KeyboardInterrupt on SIGTERM too, so live mode restores the terminal.
@@ -136,6 +214,42 @@ def main(argv=None):
     finally:
         if history is not None:
             history.close()
+
+
+def existing_history(path):
+    """The history file if it already exists, for reading saved prices; None otherwise."""
+    if str(path) != ":memory:" and not os.path.exists(path):
+        return None
+    try:
+        return History.open(path)
+    except (OSError, sqlite3.Error):
+        return None
+
+
+def load_rates(markets, history, db_path):
+    """Starting rows for ``markets``, falling back to saved prices for a market that can't be loaded.
+
+    Returns ({market: rates}, notice); the notice says what came from the history file, or is "".
+    Exits when a market can't be loaded and nothing was saved for it.
+    """
+    loaded, errors = load_markets(markets)
+    if not errors:
+        return loaded, ""
+    saved_from = history if history is not None else existing_history(db_path)
+    fallback = saved_rates(saved_from, list(errors)) if saved_from is not None else []
+    if saved_from is not None and saved_from is not history:
+        saved_from.close()
+    if not fallback:
+        sys.exit("\n".join(f"Could not load {market}: {error}" for market, error in errors.items()))
+    try:
+        apply_live_prices(fallback, fetch_live_prices())
+        freshness = "prices are live from the feed"
+    except (OSError, ValueError, KeyError):
+        freshness = f"prices are the last saved ones, up to {max(rate['time'] for rate in fallback)}"
+    for rate in fallback:
+        loaded.setdefault(market_of(rate["key"]), []).append(rate)
+    problems = "; ".join(errors.values())
+    return loaded, f"{problems}. Using the list saved in the history file; {freshness}."
 
 
 def read_holdings(args):
@@ -151,23 +265,24 @@ def run(args, options, history):
     holdings = read_holdings(args)
     if not holdings and any(alert.key == TOTAL_KEY for alert in alerts):
         sys.exit("A total alert needs holdings: use --hold or a holdings file.")
-    try:
-        rates = scrape_page_rates()
-    except OSError as error:
-        sys.exit(f"Could not fetch {PAGE_URL}: {error}")
-    if not rates:
-        sys.exit("No rates found. The page layout may have changed.")
-
-    by_key = {rate["key"]: rate for rate in rates}
     watch_keys = parse_watch(args.watch)
     alert_keys = [alert.key for alert in alerts if alert.key != TOTAL_KEY]
-    exit_if_unknown(by_key, watch_keys + alert_keys + [holding.key for holding in holdings])
-    shown = [by_key[key] for key in watch_keys] or rates
+    wanted = watch_keys + alert_keys + [holding.key for holding in holdings]
+    # Shown markets first, then any other market a watched, alerted or held code needs.
+    markets = list(dict.fromkeys([*args.market, *(market_of(key) for key in wanted)]))
+    loaded, notice = load_rates(markets, history, args.db or default_path())
+    if notice:
+        print(f"Note: {notice}", file=sys.stderr)
+    rates = [rate for market in markets for rate in loaded.get(market, [])]
+
+    by_key = {rate["key"]: rate for rate in rates}
+    exit_if_unknown(by_key, wanted)
+    shown = [by_key[key] for key in watch_keys] or [rate for market in args.market for rate in loaded.get(market, [])]
 
     if args.once:
         run_once(rates, shown, alerts, options, history, holdings)
         return
     try:
-        run_live(rates, shown, alerts, max(args.interval, MIN_INTERVAL), options, history, holdings)
+        run_live(rates, shown, alerts, max(args.interval, MIN_INTERVAL), options, history, holdings, notice)
     except KeyboardInterrupt:
         print("\nStopped.", file=sys.stderr)

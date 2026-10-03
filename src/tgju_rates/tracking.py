@@ -15,7 +15,7 @@ class PriceTracker:
 
     def __init__(self):
         self.previous_prices = {}
-        # key -> ("up" | "down", timestamp of the move)
+        # key -> ("up" | "down", timestamp of the move, price before the move)
         self.last_moves = {}
         # key -> deque of the last TREND_POINTS distinct prices
         self.trends = {}
@@ -31,7 +31,7 @@ class PriceTracker:
             key = rate["key"]
             old, new = self.previous_prices.get(key), parse_rial(rate["price"])
             if old is not None and new is not None and new != old:
-                self.last_moves[key] = ("up" if new > old else "down", now)
+                self.last_moves[key] = ("up" if new > old else "down", now, old)
             # Only changes are recorded, so the sparkline shows movement rather than a long flat line.
             trend = self.trends.get(key)
             if new is not None and (not trend or trend[-1] != new):
@@ -40,7 +40,12 @@ class PriceTracker:
 
     def recent_move(self, key, now):
         """Return "up" or "down" if the price moved within HIGHLIGHT_SECONDS, else None."""
+        change = self.recent_change(key, now, HIGHLIGHT_SECONDS)
+        return change[0] if change else None
+
+    def recent_change(self, key, now, seconds):
+        """Return (direction, price before, seconds since) for a move within ``seconds``, else None."""
         move = self.last_moves.get(key)
-        if move and now - move[1] < HIGHLIGHT_SECONDS:
-            return move[0]
+        if move and now - move[1] < seconds:
+            return move[0], move[2], now - move[1]
         return None

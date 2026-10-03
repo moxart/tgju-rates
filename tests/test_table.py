@@ -1,6 +1,6 @@
 import unittest
 
-from tgju_rates.ansi import DOWN, FLAT, UP
+from tgju_rates.ansi import DEFAULT_BACKGROUND, DOWN, FLAT, STRIPE, UP
 from tgju_rates.holdings import Holding, value_holdings
 from tgju_rates.table import change_style, render_holdings, render_table, sparkline, trend_style
 from tgju_rates.tracking import HIGHLIGHT_SECONDS, PriceTracker
@@ -79,6 +79,40 @@ class RenderTableTest(unittest.TestCase):
     def test_columns_line_up(self):
         lines = render_table([rate("price_eur", "1"), rate("price_gbp", "3,000,000")], color=False).split("\n")
         self.assertEqual(lines[2].index("Euro"), lines[3].index("British Pound"))
+
+
+class AnimationTest(unittest.TestCase):
+    def moved(self):
+        rates = [rate("price_eur", "1,000"), rate("price_gbp", "2,000,000")]
+        tracker = PriceTracker()
+        tracker.update(rates, now=0)
+        rates[0]["price"], rates[1]["price"] = "900", "2,000,500"
+        tracker.update(rates, now=10)
+        return rates, tracker
+
+    def test_flash_sets_a_background_and_hands_it_back_to_the_row(self):
+        rates, tracker = self.moved()
+        lines = render_table(rates, color=True, tracker=tracker, now=10, animation="flash").split("\n")
+        self.assertIn("48;5;160", lines[2])  # EUR fell
+        self.assertIn(DEFAULT_BACKGROUND, lines[2])
+        self.assertIn("48;5;34", lines[3])  # GBP rose, on a striped row
+        self.assertIn(STRIPE, lines[3].split("48;5;34", 1)[1])
+
+    def test_roll_spins_digits_without_changing_widths(self):
+        rates, tracker = self.moved()
+        spinning = render_table(rates, color=True, tracker=tracker, now=10, animation="roll")
+        settled = render_table(rates, color=True, tracker=tracker, now=20, animation="roll")
+        self.assertNotIn("2,000,500", spinning)
+        self.assertIn("2,000,500", settled)
+        self.assertEqual(len(spinning), len(settled))
+
+    def test_off_and_plain_output_do_not_animate(self):
+        rates, tracker = self.moved()
+        still = render_table(rates, color=True, tracker=tracker, now=20, animation="flash")
+        self.assertEqual(render_table(rates, color=True, tracker=tracker, now=10, animation="off"), still)
+        plain = render_table(rates, color=False, tracker=tracker, now=10, animation="board")
+        self.assertIn("2,000,500", plain)
+        self.assertNotIn("\033", plain)
 
 
 class RenderHoldingsTest(unittest.TestCase):

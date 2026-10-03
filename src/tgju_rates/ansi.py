@@ -12,6 +12,7 @@ LEAVE_LIVE_SCREEN = "\033[?7h\033[?25h\033[?1049l"
 STRIPE = "\033[48;5;236m"
 # Ends a cell's colour without clearing the row's stripe background.
 END_CELL = "\033[22;39m"
+DEFAULT_BACKGROUND = "\033[49m"
 
 # 256-colour palette: identifiers stand out, the price is brightest, secondary figures recede.
 UP, DOWN, FLAT = "\033[38;5;114m", "\033[38;5;203m", "\033[38;5;244m"

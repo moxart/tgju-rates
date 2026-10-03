@@ -1,6 +1,6 @@
 import unittest
 
-from tgju_rates.app import format_history
+from tgju_rates.app import format_chart, format_history
 from tgju_rates.history import History
 from tgju_rates.tracking import PriceTracker
 
@@ -22,6 +22,14 @@ class HistoryTest(unittest.TestCase):
         self.assertEqual(self.history.changes_since("price_eur", 0), [(1, 100)])
         self.assertEqual(self.history.changes_since("price_gbp", 0), [(1, 200), (2, 210)])
         self.assertEqual(self.history.changes_since("price_gbp", 2), [(2, 210)])
+
+    def test_latest_and_last_before(self):
+        self.history.record(rates_at(eur=100, gbp=200), now=1)
+        self.history.record(rates_at(eur=110, gbp=200), now=5)
+
+        self.assertEqual(self.history.latest(), {"price_eur": (5, 110), "price_gbp": (1, 200)})
+        self.assertEqual(self.history.last_before("price_eur", 5), (1, 100))
+        self.assertIsNone(self.history.last_before("price_eur", 1))
 
     def test_reopening_continues_from_last_saved_price(self):
         self.history.record(rates_at(eur=100), now=1)
@@ -64,6 +72,14 @@ class FormatHistoryTest(unittest.TestCase):
 
     def test_empty(self):
         self.assertIn("No saved prices", format_history("price_eur", 2, []))
+
+    def test_chart(self):
+        text = format_chart("price_eur", 1, [(0, 1000), (3600, 1500)], 0, 7200, toman=True, width=40)
+        lines = text.split("\n")
+        self.assertIn("in toman", lines[0])
+        self.assertTrue(lines[2].startswith("150 ┤"))
+        self.assertIn("DATE", text)
+        self.assertIn("No saved prices", format_chart("price_eur", 1, [], 0, 1))
 
 
 if __name__ == "__main__":

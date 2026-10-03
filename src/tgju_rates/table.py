@@ -1,6 +1,7 @@
 """Rendering the rates as an aligned, optionally coloured text table."""
 
-from tgju_rates.ansi import BOLD, DOWN, END_CELL, FLAT, HEADER_STYLE, RESET, STRIPE, UP
+from tgju_rates.animation import ANIMATION_SECONDS, cell_style, rolled, rolls, uses_background
+from tgju_rates.ansi import BOLD, DEFAULT_BACKGROUND, DOWN, END_CELL, FLAT, HEADER_STYLE, RESET, STRIPE, UP
 from tgju_rates.currencies import change_in_toman, display_code, english_name, rial_to_toman, to_toman
 from tgju_rates.tracking import TREND_POINTS
 
@@ -18,7 +19,7 @@ COLUMN_STYLES = (
     FLAT,  # high
 )
 COLUMN_ALIGNS = "<<>>>>>"
-PRICE_COLUMN, CHANGE_COLUMN = 2, 4
+PRICE_COLUMN, SECONDARY_COLUMN, CHANGE_COLUMN = 2, 3, 4
 
 # The ▲/▼ marker before each row is fixed width.
 MARKER_WIDTH = 3
@@ -70,14 +71,22 @@ def base_row(rate, toman):
     ]
 
 
-def render_table(rates, *, color, persian=False, toman=False, tracker=None, now=0.0):
+def price_texts(rial, toman):
+    """The price and secondary-unit cells for a rial amount, in the order the table shows them."""
+    texts = [f"{rial:,}", f"{rial_to_toman(rial):,}"]
+    return texts[::-1] if toman else texts
+
+
+def render_table(rates, *, color, persian=False, toman=False, tracker=None, now=0.0, animation="off"):
     """Return the table as a string.
 
     With ``toman``, prices, change, low and high are in toman and the rial price is the second column.
 
     With a ``tracker`` (live mode), recently moved prices get a ▲/▼ marker and a TREND column is
-    added. With ``persian``, the Persian names go in a last column, so right-to-left text doesn't
-    break the alignment of the columns before it.
+    added. With ``color`` too, the price cells of a fresh move play ``animation`` (see animation.py).
+
+    With ``persian``, the Persian names go in a last column, so right-to-left text doesn't break the
+    alignment of the columns before it.
     """
     header = list(TOMAN_HEADER if toman else BASE_HEADER)
     aligns = COLUMN_ALIGNS
@@ -96,12 +105,13 @@ def render_table(rates, *, color, persian=False, toman=False, tracker=None, now=
     # Every cell is padded, including the last, so the stripe forms an even band.
     widths = [max(len(row[i]) for row in (header, *rows)) for i in range(len(header))]
 
-    def line(row, styles=None):
+    def line(row, styles=None, ends=None):
         cells = [
             cell.ljust(width) if align == "<" else cell.rjust(width) for cell, width, align in zip(row, widths, aligns)
         ]
         if styles:
-            cells = [f"{style}{cell}{END_CELL}" if style else cell for style, cell in zip(styles, cells)]
+            ends = ends or [END_CELL] * len(cells)
+            cells = [f"{style}{cell}{end}" if style else cell for style, cell, end in zip(styles, cells, ends)]
         return COLUMN_GAP.join(cells)
 
     header_styles = [HEADER_STYLE] * len(header) if color else None
@@ -122,9 +132,20 @@ def render_table(rates, *, color, persian=False, toman=False, tracker=None, now=
             marker = f" {tint}{BOLD}{arrow}{END_CELL} " if color else f" {arrow} "
         else:
             marker = "   "
+        ends = [END_CELL] * len(row)
+        playing = tracker.recent_change(rate["key"], now, ANIMATION_SECONDS) if color and tracker else None
+        if playing and animation != "off":
+            direction, old, age = playing
+            for column, old_text in zip((PRICE_COLUMN, SECONDARY_COLUMN), price_texts(old, toman)):
+                if rolls(animation):
+                    row[column] = rolled(old_text, row[column], age)
+                styles[column] = cell_style(animation, direction, age) or styles[column]
+                if uses_background(animation):
+                    # Hand the background back to the row, or the flash would run on into the next cells.
+                    ends[column] = END_CELL + (STRIPE if index % 2 else DEFAULT_BACKGROUND)
         if color:
             stripe = STRIPE if index % 2 else ""
-            lines.append(f"{stripe}{marker}{line(row, styles)} {RESET}")
+            lines.append(f"{stripe}{marker}{line(row, styles, ends)} {RESET}")
         else:
             lines.append((marker + line(row)).rstrip())
     return "\n".join(lines)

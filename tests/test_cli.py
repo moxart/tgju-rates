@@ -1,8 +1,10 @@
 import unittest
 from contextlib import redirect_stderr
 from io import StringIO
+from unittest import mock
 
-from tgju_rates.cli import build_parser, exit_if_unknown, parse_watch
+from tgju_rates.cli import build_parser, exit_if_unknown, load_rates, main, parse_watch
+from tgju_rates.history import History
 
 
 class CliTest(unittest.TestCase):
@@ -21,10 +23,54 @@ class CliTest(unittest.TestCase):
             build_parser().parse_args(["--alert", "usd=5"])
         self.assertIn("is not an alert", stderr.getvalue())
 
+    def test_animation_choices(self):
+        self.assertEqual(build_parser().parse_args([]).animation, "flash")
+        self.assertEqual(build_parser().parse_args(["--animation", "off"]).animation, "off")
+        with redirect_stderr(StringIO()), self.assertRaises(SystemExit):
+            build_parser().parse_args(["--animation", "spin"])
+
     def test_bad_hold_is_a_usage_error(self):
         with redirect_stderr(StringIO()) as stderr, self.assertRaises(SystemExit):
             build_parser().parse_args(["--hold", "usd"])
         self.assertIn("is not a holding", stderr.getvalue())
+
+    def test_market_and_convert_are_checked_when_parsing(self):
+        self.assertEqual(build_parser().parse_args(["--market", "gold,coin"]).market, ["gold", "coin"])
+        self.assertEqual(build_parser().parse_args([]).market, ["currency"])
+        for argv in (["--market", "stocks"], ["--convert", "usd"]):
+            with self.subTest(argv=argv), redirect_stderr(StringIO()), self.assertRaises(SystemExit):
+                build_parser().parse_args(argv)
+
+    def test_chart_needs_history(self):
+        with redirect_stderr(StringIO()) as stderr, self.assertRaises(SystemExit):
+            main(["--chart"])
+        self.assertIn("go with --history", stderr.getvalue())
+
+    def test_watching_a_coin_fetches_its_market(self):
+        with mock.patch("tgju_rates.cli.load_rates", return_value=({}, "")) as load, self.assertRaises(SystemExit):
+            main(["--once", "--no-record", "--watch", "usd,emami"])
+        self.assertEqual(load.call_args[0][0], ["currency", "coin"])
+
+
+@mock.patch("tgju_rates.cli.fetch_live_prices", side_effect=OSError("feed down"))
+@mock.patch("tgju_rates.cli.load_markets", return_value=({}, {"currency": "could not fetch the page"}))
+class LoadRatesFallbackTest(unittest.TestCase):
+    def test_uses_saved_prices_when_the_page_fails(self, _load, _fetch):
+        history = History.open(":memory:")
+        self.addCleanup(history.close)
+        history.record([{"key": "price_eur", "price": "3,000,000"}], now=0)
+
+        loaded, notice = load_rates(["currency"], history, ":memory:")
+        self.assertEqual([rate["key"] for rate in loaded["currency"]], ["price_eur"])
+        self.assertIn("could not fetch the page. Using the list saved in the history file", notice)
+        self.assertIn("prices are the last saved ones", notice)
+
+    def test_exits_when_nothing_was_saved(self, _load, _fetch):
+        history = History.open(":memory:")
+        self.addCleanup(history.close)
+        with self.assertRaises(SystemExit) as raised:
+            load_rates(["currency"], history, ":memory:")
+        self.assertEqual(raised.exception.code, "Could not load currency: could not fetch the page")
 
 
 if __name__ == "__main__":
