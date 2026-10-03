@@ -10,16 +10,7 @@ Live Iranian rial exchange rates from [tgju.org](https://www.tgju.org/currency) 
 - Price history saved to a local SQLite file, so sparklines survive restarts and past prices can be listed.
 - No dependencies. Only the Python standard library is used.
 
-```
-tgju.org live rates   updated 14:24:19   every 10s   connected
-▲/▼ marks prices that moved in the last 60s.  TREND shows the last 12 price changes.  Ctrl+C to quit.
-
-   CODE       NAME           PRICE (RIAL)    TOMAN  CHANGE              LOW       HIGH  TREND
--------------------------------------------------------------------------------------------------
- ▲ DOLLAR_RL  US Dollar         2,584,650  258,465  (0.4%) 10,050  2,546,600  2,585,200  ▁▃▅█
-   EUR        Euro              2,923,500  292,350  (0%) 0         2,885,300  2,926,400
-   GBP        British Pound     3,412,800  341,280  (-0.2%) -6,900 3,401,000  3,420,500  █▆▃
-```
+![tgju-rates live view with a savings panel, price changes and trend sparklines](docs/screenshot.png)
 
 ## Installation
 
