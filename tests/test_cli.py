@@ -14,7 +14,7 @@ class CliTest(unittest.TestCase):
 
     def test_unknown_codes_exit_with_available_list(self):
         with self.assertRaises(SystemExit) as raised:
-            exit_if_unknown({"price_eur": {}}, ["price_eur", "price_xyz"])
+            exit_if_unknown({"price_eur": {}, "price_dollar_rl": {}}, ["price_eur", "price_xyz"])
         self.assertIn("Unknown currency code: xyz", str(raised.exception.code))
         self.assertIn("Available: eur, usd", str(raised.exception.code))
 

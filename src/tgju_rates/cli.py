@@ -156,7 +156,7 @@ def parse_watch(watch):
 def exit_if_unknown(by_key, keys):
     unknown = [key for key in keys if key not in by_key]
     if unknown:
-        available = ", ".join(sorted(display_code(key).lower() for key in by_key) + ["usd"])
+        available = ", ".join(sorted(display_code(key).lower() for key in by_key))
         sys.exit(
             f"Unknown currency code: {', '.join(display_code(k).lower() for k in unknown)}\nAvailable: {available}\n"
             + market_codes_epilog()

@@ -98,7 +98,7 @@ gained since you bought it, and today's move, with a TOTAL row and a sparkline o
 
 ```
    YOUR SAVINGS  AMOUNT   WORTH (RIAL)  SINCE BOUGHT    TODAY
-   DOLLAR_RL      1,200  3,101,580,000     ▲ +26.6%   ▲ +0.8%
+   USD            1,200  3,101,580,000     ▲ +26.6%   ▲ +0.8%
    EUR              300    877,050,000                ▼ -0.5%
    TOTAL                 3,978,630,000     ▲ +26.6%   ▲ +0.5%  ▁▃▂▆█
 ```
@@ -173,7 +173,7 @@ for a different file and `--no-record` to not save anything. If the file can't b
 warns and runs without it.
 
 ```
-DOLLAR_RL (US Dollar), last 7 day(s), in rial
+USD (US Dollar), last 7 day(s), in rial
 
 2,685,000 ┤                                                    ███▂▂
           │                                                  ▇▇█████

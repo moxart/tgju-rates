@@ -17,6 +17,7 @@ class CurrencyCodeTest(unittest.TestCase):
     def test_row_key_normalises_and_resolves_usd_alias(self):
         self.assertEqual(row_key(" EUR "), "price_eur")
         self.assertEqual(row_key("usd"), "price_dollar_rl")
+        self.assertEqual(display_code("price_dollar_rl"), "USD")
 
     def test_display_code(self):
         self.assertEqual(display_code("price_gbp"), "GBP")

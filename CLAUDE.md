@@ -34,7 +34,7 @@ After `pip install .`, the `tgju-rates` console script runs `tgju_rates.cli:main
 - `history.py`: `History` (SQLite, stores a row only when a key's price changes; `latest`, `last_before`), `default_path` (XDG data dir).
 - `export.py`: `rates_json` (one line per snapshot, so live `--json` is JSON Lines), `history_json`.
 - `source.py`: `CurrencyTableParser`/`parse_page_rates` (HTML), `fetch_live_prices`/`apply_live_prices` (JSON feed), `feed_market_rates`, `load_markets` (per-market results and errors).
-- `currencies.py`: `ENGLISH_NAMES` (includes the instruments' names), `CODE_ALIASES`, `UNIT_SIZE` (JPY per 100), `row_key` (instrument codes first), `display_code`, `known_codes`, `parse_rial`, `to_toman`/`rial_to_toman` (rounds toward zero), `parse_change`, `change_in_toman`, `format_amount`.
+- `currencies.py`: `ENGLISH_NAMES` (includes the instruments' names), `CODE_ALIASES`, `UNIT_SIZE` (JPY per 100), `row_key` (instrument codes first), `display_code` (shows `price_dollar_rl` as `USD`; the key itself stays everywhere else, e.g. in the history file), `known_codes`, `parse_rial`, `to_toman`/`rial_to_toman` (rounds toward zero), `parse_change`, `change_in_toman`, `format_amount`.
 - `controls.py`: `LiveControls`, the key-driven view state (toman toggle, `SORT_MODES`, filter, animation, pause, quit), `apply` filters/sorts the shown rates.
 - `animation.py`: `ANIMATIONS` (`flash`, `glow`, `roll`, `board`, `off`), `cell_style` (colour ramps by age), `rolled` (spinning digits), `ANIMATION_SECONDS`, `FRAME_SECONDS`.
 - `keys.py`: `KeyReader` (cbreak mode, `select` on POSIX, `msvcrt` polling on Windows), `split_keys` (keeps escape sequences whole).
@@ -72,6 +72,6 @@ Animations: `render_table` asks `tracker.recent_change(key, now, ANIMATION_SECON
 
 Savings: `--hold` and the holdings file use the same `code=amount[@price [toman|rial]]` syntax; a `--hold` replaces the file's entry for that key. A unit-less price is rial in the file (so the file means the same on every run) and follows `--toman` in `--hold` (like `--alert`). Holdings are valued against all rates, not just `--watch`. `Valuation.complete_worth` is `None` while any holding lacks a price; `total` alerts and the TOTAL sparkline use it so a partial total never fires an alert. A `total` alert (`TOTAL_KEY` in `alerts.py`) without holdings exits with an error.
 
-Converter: `--convert` needs only the feed (every currency, coin and crypto is in it), so it skips the page. It opens the history file only if it already exists (`existing_history`), for the fallback. Output labels `price_dollar_rl` as USD.
+Converter: `--convert` needs only the feed (every currency, coin and crypto is in it), so it skips the page. It opens the history file only if it already exists (`existing_history`), for the fallback.
 
 History: on by default (`--no-record` disables, `--db` overrides the path). Opening failures warn and continue without history; `sqlite3.Error` while recording goes into the status line. `--history` exits before scraping, so it works offline.

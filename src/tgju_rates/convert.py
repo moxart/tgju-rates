@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from tgju_rates.currencies import (
-    CODE_ALIASES,
     RIAL_PER_TOMAN,
     UNIT_SIZE,
     display_code,
@@ -24,8 +23,6 @@ from tgju_rates.source import fetch_live_prices
 MONEY_UNITS = {"rial": 1, "irr": 1, "toman": RIAL_PER_TOMAN}
 # Words allowed between the units: "250 usd to eur", "250 usd in toman".
 FILLER_WORDS = {"to", "in", "="}
-# Label "price_dollar_rl" as USD, the code you typed, rather than the site's DOLLAR_RL.
-ALIAS_BY_KEY = {row_key(alias): alias.upper() for alias in CODE_ALIASES}
 AMOUNT_PATTERN = re.compile(r"^\d[\d,]*(?:\.\d+)?$")
 EXAMPLE = '"250 usd", "250 usd eur" or "50,000,000 toman to usd"'
 
@@ -73,7 +70,7 @@ def convert(conversion, prices):
 def unit_label(unit):
     if unit in MONEY_UNITS:
         return unit
-    return ALIAS_BY_KEY.get(unit) or display_code(unit)
+    return display_code(unit)
 
 
 def format_quantity(value, unit):

@@ -32,11 +32,11 @@ class CheckAlertsTest(unittest.TestCase):
 
     def test_message_names_currency_and_price(self):
         [message] = check_alerts([parse_alert("usd<200")], rates_at(150), set())
-        self.assertEqual(message, "DOLLAR_RL is 150 rial  (alert: DOLLAR_RL < 200)")
+        self.assertEqual(message, "USD is 150 rial  (alert: USD < 200)")
 
     def test_message_in_toman(self):
         [message] = check_alerts([parse_alert("usd<200", toman=True)], rates_at(1500), set(), toman=True)
-        self.assertEqual(message, "DOLLAR_RL is 150 toman  (alert: DOLLAR_RL < 200)")
+        self.assertEqual(message, "USD is 150 toman  (alert: USD < 200)")
 
     def test_currency_without_price_is_skipped(self):
         alerts = [parse_alert("eur>1")]

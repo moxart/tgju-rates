@@ -9,8 +9,9 @@ UNIT_NAMES = {False: "rial", True: "toman"}
 # A change cell like "(-0.8%) -23,500": percent, then the amount in rial.
 CHANGE_PATTERN = re.compile(r"^\((-?[\d.]+)%\)\s*(-?[\d,]+)$")
 
-# The site's key for the US dollar isn't its ISO code, so accept "usd" as well.
+# The site's key for the US dollar isn't its ISO code, so "usd" is typed and shown instead.
 CODE_ALIASES = {"usd": "dollar_rl"}
+CODE_BY_SITE_CODE = {site: code for code, site in CODE_ALIASES.items()}
 
 # Persian script renders poorly in most terminal fonts, so the table leads with English names.
 # Keyed by the site's row key; a currency the site adds later needs an entry here.
@@ -68,13 +69,13 @@ def row_key(code):
 def display_code(key):
     if key in INSTRUMENTS:
         return INSTRUMENTS[key].code.upper()
-    return key.removeprefix("price_").upper()
+    site_code = key.removeprefix("price_")
+    return CODE_BY_SITE_CODE.get(site_code, site_code).upper()
 
 
 def known_codes():
     """Every code this program knows without asking the site, for completion and error messages."""
-    codes = {display_code(key).lower() for key in ENGLISH_NAMES}
-    return sorted(codes - {CODE_ALIASES["usd"]} | set(CODE_ALIASES))
+    return sorted(display_code(key).lower() for key in ENGLISH_NAMES)
 
 
 def english_name(key):
