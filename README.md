@@ -127,12 +127,17 @@ In live mode in a terminal, single keys change the view without restarting:
 | `t` | switch between toman and rial |
 | `s` | sort: site order, biggest move today, highest price |
 | `/` | filter by code or English name as you type; Enter keeps it, Esc clears it |
+| `c` | convert, e.g. `250 usd eur`; the result updates as you type and with each new price |
 | `a` | next price animation: flash, glow, roll, board, off |
-| `Esc` | clear the filter |
+| `Esc` | clear the filter and the converter |
 | `p` | pause and resume updates |
 | `q` | quit (Ctrl+C works too) |
 
 `t` only changes the display. `--alert` limits stay in the unit they were given in.
+
+`c` takes the same input as `--convert` but uses the prices already on screen, so it works only for loaded
+markets (`--market coin` for `emami`, for example). Enter keeps the line above the table; `c` edits it
+again.
 
 ### Animations
 

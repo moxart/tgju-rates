@@ -1,7 +1,14 @@
 import unittest
 from unittest import mock
 
-from tgju_rates.convert import Conversion, convert, format_conversion, parse_conversion, run_convert
+from tgju_rates.convert import (
+    Conversion,
+    convert,
+    format_conversion,
+    parse_conversion,
+    quick_conversion,
+    run_convert,
+)
 from tgju_rates.history import History
 
 PRICES = {"price_dollar_rl": 2_500_000, "price_eur": 3_000_000, "price_jpy": 1_700_000, "crypto-bitcoin-irr": 10**11}
@@ -37,6 +44,14 @@ class ConvertTest(unittest.TestCase):
         text = format_conversion(Conversion(2, "price_dollar_rl"), {"rial": 5e6, "toman": 5e5}, PRICES)
         self.assertEqual(text.splitlines()[0], "2 USD = 5,000,000 rial = 500,000 toman")
         self.assertIn("1 USD (US Dollar) = 2,500,000 rial", text)
+
+
+class QuickConversionTest(unittest.TestCase):
+    def test_result_hint_and_missing_market(self):
+        self.assertEqual(quick_conversion("2 usd", PRICES), "2 USD = 5,000,000 rial = 500,000 toman")
+        self.assertIn("type e.g.", quick_conversion("2 ", PRICES))
+        self.assertEqual(quick_conversion("1 emami", PRICES), "no price for emami (add --market coin)")
+        self.assertEqual(quick_conversion("1 xyz", PRICES), "no price for xyz")
 
 
 class RunConvertTest(unittest.TestCase):

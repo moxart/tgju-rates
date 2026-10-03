@@ -18,6 +18,7 @@ from tgju_rates.currencies import (
     parse_rial,
     row_key,
 )
+from tgju_rates.markets import CURRENCY, market_of
 from tgju_rates.source import fetch_live_prices
 
 MONEY_UNITS = {"rial": 1, "irr": 1, "toman": RIAL_PER_TOMAN}
@@ -25,6 +26,7 @@ MONEY_UNITS = {"rial": 1, "irr": 1, "toman": RIAL_PER_TOMAN}
 FILLER_WORDS = {"to", "in", "="}
 AMOUNT_PATTERN = re.compile(r"^\d[\d,]*(?:\.\d+)?$")
 EXAMPLE = '"250 usd", "250 usd eur" or "50,000,000 toman to usd"'
+SHORT_EXAMPLE = "250 usd, 250 usd eur, 50,000,000 toman btc"
 
 
 @dataclass(frozen=True)
@@ -81,10 +83,29 @@ def format_quantity(value, unit):
     return f"{value:.6g}"
 
 
-def format_conversion(conversion, results, prices, note=""):
+def summary_line(conversion, results):
     amount = format_quantity(conversion.amount, conversion.source)
     sides = " = ".join(f"{format_quantity(value, unit)} {unit_label(unit)}" for unit, value in results.items())
-    lines = [f"{amount} {unit_label(conversion.source)} = {sides}"]
+    return f"{amount} {unit_label(conversion.source)} = {sides}"
+
+
+def quick_conversion(text, prices):
+    """One line for live mode's converter, from the prices already polled; a hint while it's incomplete."""
+    try:
+        conversion = parse_conversion(text)
+    except ValueError:
+        return f"type e.g. {SHORT_EXAMPLE}"
+    keys = [unit for unit in (conversion.source, conversion.target) if unit and unit not in MONEY_UNITS]
+    missing = [key for key in keys if key not in prices]
+    if missing:
+        hints = sorted({market_of(key) for key in missing} - {CURRENCY})
+        more = f" (add --market {','.join(hints)})" if hints else ""
+        return f"no price for {', '.join(display_code(key).lower() for key in missing)}{more}"
+    return summary_line(conversion, convert(conversion, prices))
+
+
+def format_conversion(conversion, results, prices, note=""):
+    lines = [summary_line(conversion, results)]
     for unit in dict.fromkeys([conversion.source, *results]):
         if unit not in MONEY_UNITS:
             size = UNIT_SIZE.get(unit, 1)

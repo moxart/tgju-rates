@@ -32,6 +32,17 @@ class LiveControlsTest(unittest.TestCase):
         press(controls, "a")
         self.assertEqual(controls.animation, "flash")
 
+    def test_c_types_a_conversion_that_takes_every_key(self):
+        controls = LiveControls()
+        press(controls, ["c", *"2 usd", "\x7f", "q", "\r"])
+        self.assertEqual(controls.conversion, "2 usq")
+        self.assertFalse(controls.converting)
+        self.assertFalse(controls.quit)
+        press(controls, ["c", "\x1b"])
+        self.assertEqual(controls.conversion, "")
+        press(controls, ["c", "1", "\r", "/", "e", "\r", "\x1b"])  # Esc outside typing clears both lines
+        self.assertEqual((controls.conversion, controls.filter), ("", ""))
+
     def test_toggles_toman_and_pause(self):
         controls = LiveControls(toman=True)
         press(controls, "tp")

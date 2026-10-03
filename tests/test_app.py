@@ -43,6 +43,13 @@ class LiveSessionKeysTest(unittest.TestCase):
         self.assertIn("GBP", frames[-1])
         self.assertNotIn("EUR", frames[-1])
 
+    def test_c_shows_a_conversion_from_polled_prices(self, _fetch):
+        frames = []
+        self.session().run(frames.append, FakeKeys(["c", *"2 eur gbp"], ["\r"]))
+        self.assertIn("convert: 2 eur gbp_  →  2 EUR = 1.71 GBP", frames[-2])
+        self.assertIn("convert: 2 eur gbp  →  2 EUR = 1.71 GBP   (c to edit, Esc to close)", frames[-1])
+        self.assertEqual(_fetch.call_count, 1)  # no fetch of its own
+
     def test_no_match_says_so(self, _fetch):
         frames = []
         self.session().run(frames.append, FakeKeys("/zzz"))

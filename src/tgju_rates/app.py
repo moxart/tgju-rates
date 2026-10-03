@@ -14,7 +14,8 @@ from tgju_rates.animation import ANIMATION_SECONDS, DEFAULT_ANIMATION, FRAME_SEC
 from tgju_rates.ansi import ALERT_STYLE, DIM, DOWN, RESET, UP
 from tgju_rates.chart import CHART_HEIGHT, daily_summary, render_chart, resample
 from tgju_rates.controls import KEY_HELP, LiveControls
-from tgju_rates.currencies import ENGLISH_NAMES, UNIT_NAMES, display_code, english_name, rial_to_toman
+from tgju_rates.convert import quick_conversion
+from tgju_rates.currencies import ENGLISH_NAMES, UNIT_NAMES, display_code, english_name, parse_rial, rial_to_toman
 from tgju_rates.export import history_json, rates_json
 from tgju_rates.holdings import TotalTrend, value_holdings
 from tgju_rates.keys import KeyReader
@@ -238,6 +239,7 @@ class LiveSession:
         state = "PAUSED" if self.controls.paused else f"every {self.interval:g}s"
         view = self.controls.describe()
         view_line = f"{view}\n" if view else ""
+        convert_line = self.convert_line(dim_start, dim_end)
         key_help = f"{dim_start}Keys: {KEY_HELP}{dim_end}\n" if self.interactive else ""
         quit_hint = "" if self.interactive else "  Ctrl+C to quit."
         empty = "\nNo currency matches the filter." if self.controls.filter and not shown else ""
@@ -246,9 +248,19 @@ class LiveSession:
             f"{dim_start}▲/▼ marks prices that moved in the last {HIGHLIGHT_SECONDS}s.  "
             f"TREND shows the last {TREND_POINTS} price changes.{quit_hint}{dim_end}\n"
             f"{key_help}"
-            f"{notice}{view_line}{watching}{alert_lines}\n"
+            f"{notice}{view_line}{convert_line}{watching}{alert_lines}\n"
             f"{savings}{table}{empty}"
         )
+
+    def convert_line(self, dim_start, dim_end):
+        """The converter's line ("c"), worked out from the latest polled prices of every loaded rate."""
+        controls = self.controls
+        if not controls.converting and not controls.conversion:
+            return ""
+        prices = {rate["key"]: parse_rial(rate["price"]) for rate in self.rates}
+        result = quick_conversion(controls.conversion, {key: price for key, price in prices.items() if price})
+        cursor, hint = ("_", "Enter to keep, Esc to close") if controls.converting else ("", "c to edit, Esc to close")
+        return f"convert: {controls.conversion}{cursor}  →  {result}   {dim_start}({hint}){dim_end}\n"
 
 
 HISTORY_VIEWS = ("list", "chart", "csv")
