@@ -36,7 +36,7 @@ class CliTest(unittest.TestCase):
 
     def test_market_and_convert_are_checked_when_parsing(self):
         self.assertEqual(build_parser().parse_args(["--market", "gold,coin"]).market, ["gold", "coin"])
-        self.assertEqual(build_parser().parse_args([]).market, ["currency"])
+        self.assertIsNone(build_parser().parse_args([]).market)
         for argv in (["--market", "stocks"], ["--convert", "usd"]):
             with self.subTest(argv=argv), redirect_stderr(StringIO()), self.assertRaises(SystemExit):
                 build_parser().parse_args(argv)
@@ -50,6 +50,14 @@ class CliTest(unittest.TestCase):
         with mock.patch("tgju_rates.cli.load_rates", return_value=({}, "")) as load, self.assertRaises(SystemExit):
             main(["--once", "--no-record", "--watch", "usd,emami"])
         self.assertEqual(load.call_args[0][0], ["currency", "coin"])
+
+    def test_dashboard_loads_every_market_unless_market_narrows_it(self):
+        for argv, markets in (([], ["currency", "coin", "gold", "crypto"]), (["--market", "coin"], ["coin"])):
+            with self.subTest(argv=argv), mock.patch("tgju_rates.cli.load_rates", return_value=({}, "")) as load:
+                with mock.patch("tgju_rates.cli.run_once") as run_once:
+                    main(["--dashboard", "--once", "--no-record", *argv])
+                self.assertEqual(load.call_args[0][0], markets)
+                self.assertEqual(run_once.call_args[0][1], [])  # nothing loaded, so nothing shown
 
 
 @mock.patch("tgju_rates.cli.fetch_live_prices", side_effect=OSError("feed down"))

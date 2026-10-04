@@ -13,10 +13,11 @@ from tgju_rates.app import HISTORY_VIEWS, Options, run_history, run_live, run_on
 from tgju_rates.completion import SHELLS, completion_script
 from tgju_rates.convert import parse_conversion, run_convert
 from tgju_rates.currencies import display_code, row_key
+from tgju_rates.dashboard import DASHBOARD_CODES
 from tgju_rates.doctor import run_doctor
 from tgju_rates.history import History, default_path
 from tgju_rates.holdings import default_holdings_path, load_holdings, merge_holdings, parse_holding
-from tgju_rates.markets import CURRENCY, FEED_MARKETS, market_of, parse_markets
+from tgju_rates.markets import CURRENCY, FEED_MARKETS, MARKETS, market_of, parse_markets
 from tgju_rates.source import apply_live_prices, fetch_live_prices, load_markets
 
 DEFAULT_INTERVAL = 10
@@ -92,8 +93,14 @@ def build_parser():
         "--market",
         metavar="MARKETS",
         type=market_argument,
-        default=[CURRENCY],
-        help="comma-separated markets to show: currency, coin, gold, crypto, or all (default currency)",
+        help="comma-separated markets to show: currency, coin, gold, crypto, or all (default currency, "
+        "or all with --dashboard)",
+    )
+    parser.add_argument(
+        "--dashboard",
+        action="store_true",
+        help="show the main currencies, gold coins, gold and crypto as panels on one screen "
+        "(--watch picks the codes, --market the panels)",
     )
     parser.add_argument(
         "--watch",
@@ -179,7 +186,9 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if (args.chart or args.csv) and not args.history:
         parser.error("--chart and --csv go with --history")
-    options = Options(persian=args.persian, toman=args.toman, json=args.json, animation=args.animation)
+    options = Options(
+        persian=args.persian, toman=args.toman, json=args.json, animation=args.animation, dashboard=args.dashboard
+    )
     db_path = args.db or default_path()
 
     if args.completion:
@@ -265,11 +274,15 @@ def run(args, options, history):
     holdings = read_holdings(args)
     if not holdings and any(alert.key == TOTAL_KEY for alert in alerts):
         sys.exit("A total alert needs holdings: use --hold or a holdings file.")
+    shown_markets = args.market or (list(MARKETS) if args.dashboard else [CURRENCY])
     watch_keys = parse_watch(args.watch)
+    dashboard_keys = []
+    if args.dashboard and not watch_keys:
+        dashboard_keys = [row_key(code) for code in DASHBOARD_CODES if market_of(row_key(code)) in shown_markets]
     alert_keys = [alert.key for alert in alerts if alert.key != TOTAL_KEY]
     wanted = watch_keys + alert_keys + [holding.key for holding in holdings]
     # Shown markets first, then any other market a watched, alerted or held code needs.
-    markets = list(dict.fromkeys([*args.market, *(market_of(key) for key in wanted)]))
+    markets = list(dict.fromkeys([*shown_markets, *(market_of(key) for key in wanted)]))
     loaded, notice = load_rates(markets, history, args.db or default_path())
     if notice:
         print(f"Note: {notice}", file=sys.stderr)
@@ -277,7 +290,12 @@ def run(args, options, history):
 
     by_key = {rate["key"]: rate for rate in rates}
     exit_if_unknown(by_key, wanted)
-    shown = [by_key[key] for key in watch_keys] or [rate for market in args.market for rate in loaded.get(market, [])]
+    if dashboard_keys:
+        # A currency the page no longer lists is left out rather than stopping the dashboard.
+        shown = [by_key[key] for key in dashboard_keys if key in by_key]
+    else:
+        shown = [by_key[key] for key in watch_keys]
+        shown = shown or [rate for market in shown_markets for rate in loaded.get(market, [])]
 
     if args.once:
         run_once(rates, shown, alerts, options, history, holdings)

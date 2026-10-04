@@ -16,6 +16,7 @@ from tgju_rates.chart import CHART_HEIGHT, daily_summary, render_chart, resample
 from tgju_rates.controls import KEY_HELP, LiveControls
 from tgju_rates.convert import quick_conversion
 from tgju_rates.currencies import ENGLISH_NAMES, UNIT_NAMES, display_code, english_name, parse_rial, rial_to_toman
+from tgju_rates.dashboard import render_dashboard
 from tgju_rates.export import history_json, rates_json
 from tgju_rates.holdings import TotalTrend, value_holdings
 from tgju_rates.keys import KeyReader
@@ -37,6 +38,11 @@ class Options:
     toman: bool = False
     json: bool = False
     animation: str = DEFAULT_ANIMATION
+    dashboard: bool = False
+
+
+def terminal_width():
+    return shutil.get_terminal_size().columns
 
 
 def run_once(rates, shown, alerts, options, history=None, holdings=()):
@@ -52,7 +58,10 @@ def run_once(rates, shown, alerts, options, history=None, holdings=()):
     print(f"Source: {SITE_NAME}   ({len(shown)} rates)\n")
     if valuation:
         print(render_holdings(valuation, color=color, toman=options.toman) + "\n")
-    print(render_table(shown, color=color, persian=options.persian, toman=options.toman))
+    if options.dashboard:
+        print(render_dashboard(shown, color=color, toman=options.toman, width=terminal_width()))
+    else:
+        print(render_table(shown, color=color, persian=options.persian, toman=options.toman))
     if fired:
         start, end = (ALERT_STYLE, RESET) if color else ("", "")
         print("\n" + "\n".join(f"{start}ALERT{end}  {message}" for message in fired))
@@ -222,15 +231,14 @@ class LiveSession:
         notice = f"{alert_start}NOTE{alert_end} {self.notice}\n" if self.notice else ""
         alert_lines = "".join(f"{alert_start}ALERT{alert_end} {line}\n" for line in self.recent_alerts)
         shown = self.controls.apply(self.shown)
-        table = render_table(
-            shown,
-            color=self.color,
-            persian=self.options.persian,
-            toman=self.controls.toman,
-            tracker=self.tracker,
-            now=now,
-            animation=self.controls.animation,
+        controls = self.controls
+        view_settings = dict(
+            color=self.color, toman=controls.toman, tracker=self.tracker, now=now, animation=controls.animation
         )
+        if self.options.dashboard:
+            table = render_dashboard(shown, width=terminal_width(), **view_settings)
+        else:
+            table = render_table(shown, persian=self.options.persian, **view_settings)
         savings = ""
         if self.valuation:
             trend = self.total_trend.values

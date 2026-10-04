@@ -38,6 +38,7 @@ tgju-rates --animation roll      # flash (default), glow, roll, board or off
 tgju-rates --watch usd,eur,gbp   # show only these currencies, in this order
 tgju-rates --market coin,gold    # gold coins and gold instead of currencies (currency, coin, gold, crypto, all)
 tgju-rates --watch usd,emami,btc # mix markets; each code's market is fetched as needed
+tgju-rates --dashboard           # currencies, coins, gold and crypto as panels on one screen
 tgju-rates --alert "usd>2600000" --alert "eur<=2,850,000"
 tgju-rates --toman               # prices in toman; --alert limits are read as toman too
 tgju-rates --hold usd=1200@2,450,000 --hold eur=300   # what your savings are worth
@@ -69,6 +70,22 @@ comma-separated mix, or `all`. Their codes work everywhere a currency code does:
 
 All prices are in rial (toman with `--toman`), so a coin or a gram of gold can go in your savings:
 `--hold emami=2@2,400,000,000 --hold gold18=15.5`. `tgju-rates --help` lists the codes too.
+
+### Dashboard
+
+`--dashboard` shows one panel per market (currencies, gold coins, gold & silver, crypto) with the
+main codes of each: price, today's change in percent and, when live, the trend. The panels go side
+by side as far as the terminal is wide, so four panels sit 2×2 at about 130 columns and in a single
+row at about 150. `--watch` picks your own codes, which are grouped into panels by market, and
+`--market` limits which panels appear:
+
+```sh
+tgju-rates --dashboard --toman
+tgju-rates --dashboard --watch usd,eur,try,emami,rob,btc,usdt
+tgju-rates --dashboard --market coin,gold
+```
+
+The keys, animations, alerts and savings panel work the same as in the table view.
 
 ### Converter
 
@@ -243,6 +260,7 @@ src/tgju_rates/
 ├── export.py      JSON output
 ├── alerts.py      alert rules and desktop notifications
 ├── table.py       rendering the table, sparklines and colours
+├── dashboard.py   --dashboard: one panel per market, laid out in a grid
 ├── screen.py      flicker-free in-place terminal updates
 └── ansi.py        terminal escape codes and the colour palette
 tests/             unit tests (offline, no network needed)

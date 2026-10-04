@@ -13,6 +13,7 @@ PYTHONPATH=src python3 -m tgju_rates [--once] [-i 5] [--persian] [--toman] [--js
 PYTHONPATH=src python3 -m tgju_rates --hold usd=1200@2,450,000 [--holdings PATH] [--alert "total>5000000000"]
 PYTHONPATH=src python3 -m tgju_rates --history usd [--days 7] [--db PATH] [--chart|--csv]   # saved prices (offline)
 PYTHONPATH=src python3 -m tgju_rates --market coin,gold,crypto [--watch usd,emami,btc]
+PYTHONPATH=src python3 -m tgju_rates --dashboard [--watch CODES] [--market coin,gold]   # one panel per market
 PYTHONPATH=src python3 -m tgju_rates --convert "250 usd eur" | --doctor | --completion bash
 PYTHONPATH=src python3 -m unittest discover -s tests        # all tests (offline)
 PYTHONPATH=src python3 -m unittest tests.test_screen        # one module
@@ -41,6 +42,7 @@ After `pip install .`, the `tgju-rates` console script runs `tgju_rates.cli:main
 - `tracking.py`: `PriceTracker` (previous prices, last up/down move with the price before it, trend deques), `recent_change`, `HIGHLIGHT_SECONDS`, `TREND_POINTS`.
 - `alerts.py`: `Alert`, `parse_alert` (raises `ValueError`; cli wraps it in `ArgumentTypeError`), `check_alerts`, `notify`.
 - `table.py`: `render_table`, `render_holdings` (the savings panel), `sparkline`, column styles/alignments.
+- `dashboard.py`: `DASHBOARD_CODES` (what `--dashboard` shows without `--watch`), `group_by_market`, `render_panel` (CODE, PRICE, CHANGE as a percent, TREND when live; lines padded to the panel width so the grid needs no ANSI stripping), `arrange` (fewest grid rows that fit the width, balanced, panels aligned into grid columns), `render_dashboard`.
 - `screen.py`: `LiveScreen` (in-place diff redraw), `print_frame` (piped output).
 - `ansi.py`: escape codes and the colour palette.
 
@@ -69,6 +71,8 @@ Trends: `PriceTracker.update` appends to a key's deque only when the price diffe
 Keys: `LiveSession.run` waits on `keys.read(timeout)` until the next poll instead of sleeping, so a key redraws at once (timeout `None` while paused). The display unit comes from `controls.toman`, not `options.toman`, so `t` affects the table, JSON and alert messages; alert limits were converted to rial at startup and don't change. While the filter or the converter (`c`) is being typed, every key (including `q`) goes into it; Esc outside typing clears both.
 
 Animations: `render_table` asks `tracker.recent_change(key, now, ANIMATION_SECONDS)` and, only with `color`, restyles the price and secondary-unit cells (and with `roll`/`board` replaces their text with `rolled`, which never changes the width). A flash sets a background, so that cell ends with `END_CELL` plus the row's background (`STRIPE` or `DEFAULT_BACKGROUND`) instead of plain `END_CELL`. `LiveSession.frame` sets `animating`; while it is true `run` waits at most `FRAME_SECONDS` and redraws, and it draws once more after the animation ends so the cell settles. The current style lives in `controls.animation` (`a` cycles it), starting from `--animation`.
+
+Dashboard: `Options.dashboard` swaps `render_table` for `render_dashboard` in `run_once` and `LiveSession.frame`, using `app.terminal_width()`. `--market` defaults to `None` and resolves in `cli.run` to every market with `--dashboard`, else `currency`. Panels follow the order of `shown`, so the filter and sort keys work within each panel. `--persian` is ignored there.
 
 Savings: `--hold` and the holdings file use the same `code=amount[@price [toman|rial]]` syntax; a `--hold` replaces the file's entry for that key. A unit-less price is rial in the file (so the file means the same on every run) and follows `--toman` in `--hold` (like `--alert`). Holdings are valued against all rates, not just `--watch`. `Valuation.complete_worth` is `None` while any holding lacks a price; `total` alerts and the TOTAL sparkline use it so a partial total never fires an alert. A `total` alert (`TOTAL_KEY` in `alerts.py`) without holdings exits with an error.
 
