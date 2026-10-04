@@ -48,8 +48,10 @@ tgju-rates --history usd         # saved USD prices from the last day
 tgju-rates --history eur --days 7 --toman
 tgju-rates --history usd --days 30 --chart   # a chart and a daily open/low/high/close table
 tgju-rates --history usd --days 30 --csv > usd.csv
+tgju-rates --history usd --chart --jalali    # dates in the Persian calendar
 tgju-rates --convert "250 usd"                # 250 USD in rial and toman
 tgju-rates --convert "50,000,000 toman to btc"
+tgju-rates --jewelry "12.5g wage 18%"         # what an 18k gold piece should cost
 tgju-rates --doctor              # check that tgju.org still works with this program
 ```
 
@@ -108,6 +110,25 @@ after the condition has stopped holding in between. Fired alerts are listed abov
 desktop notification when `notify-send` is available. Alerts work on any currency, including ones not
 in `--watch`.
 
+### Jewelry calculator
+
+`--jewelry` works out what a piece of 18k gold jewelry should cost at the live price of a gram of
+18k gold, using the formula gold shops use:
+
+- gold = weight × price per gram
+- making charge (اجرت) = a percent of the gold
+- seller's profit = a percent of gold plus making charge (7% unless you give `profit`)
+- VAT = a percent of making charge plus profit, not of the gold (10% unless you give `tax`)
+
+```sh
+tgju-rates --jewelry "12.5g wage 18%"
+tgju-rates --jewelry "8 grams wage 20% profit 5%" --toman
+tgju-rates --jewelry "3.2g wage 15% tax 9%" --json
+```
+
+Each part is shown in rial and toman. When the feed can't be reached, the last saved gold price is
+used and a note says so.
+
 ### Your savings
 
 List the currencies you hold, and a panel above the table shows what each is worth now, how much it has
@@ -141,16 +162,22 @@ In live mode in a terminal, single keys change the view without restarting:
 
 | Key | Does |
 | --- | --- |
+| `↑` `↓` | select a row (in the table or the dashboard) |
+| `Enter` | open the selected row's details: price, change, low/high, its alerts, a chart and the last 7 days |
+| `d` | in the details, show the last 1, 7 or 30 days |
 | `t` | switch between toman and rial |
 | `s` | sort: site order, biggest move today, highest price |
 | `/` | filter by code or English name as you type; Enter keeps it, Esc clears it |
 | `c` | convert, e.g. `250 usd eur`; the result updates as you type and with each new price |
 | `a` | next price animation: flash, glow, roll, board, off |
-| `Esc` | clear the filter and the converter |
+| `Esc` | leave the details; otherwise clear the filter, the converter and the selection |
 | `p` | pause and resume updates |
 | `q` | quit (Ctrl+C works too) |
 
 `t` only changes the display. `--alert` limits stay in the unit they were given in.
+
+The details chart comes from the history file, so it's empty with `--no-record` and fills in as prices
+are saved.
 
 `c` takes the same input as `--convert` but uses the prices already on screen, so it works only for loaded
 markets (`--market coin` for `emami`, for example). Enter keeps the line above the table; `c` edits it
@@ -212,6 +239,10 @@ DATE             OPEN        LOW       HIGH      CLOSE           CHANGE
 
 Prices are only saved while the program runs, so gaps in the chart are times it wasn't running.
 
+`--jalali` shows dates in the Persian calendar (1405/07/12 instead of 2026-10-04) in `--history`,
+`--chart`, the live status line and the details view. With `--csv` it adds a `jalali_time` column and
+keeps the ISO `time` column for spreadsheets. JSON output keeps ISO times.
+
 ### Shell completion
 
 `--completion bash|zsh|fish` prints a completion script for options and codes:
@@ -252,7 +283,9 @@ src/tgju_rates/
 ├── markets.py     the coin, gold and crypto entries taken from the feed
 ├── currencies.py  currency codes, English names, rial/toman formatting
 ├── convert.py     --convert
+├── jewelry.py     --jewelry
 ├── chart.py       --history --chart
+├── dates.py       Gregorian or Jalali dates for display
 ├── doctor.py      --doctor
 ├── completion.py  shell completion scripts
 ├── tracking.py    price moves between polls and trend history

@@ -1,6 +1,7 @@
 """Read single key presses in live mode without waiting for Enter."""
 
 import os
+import re
 import select
 import sys
 import time
@@ -12,6 +13,14 @@ except ImportError:  # Windows
     termios = tty = None
 
 ESCAPE = "\x1b"
+# Arrow keys, in the normal and the "application" cursor mode some terminals switch to.
+UP_KEYS = ("\x1b[A", "\x1bOA")
+DOWN_KEYS = ("\x1b[B", "\x1bOB")
+UP_KEY, DOWN_KEY = UP_KEYS[0], DOWN_KEYS[0]
+# A CSI sequence ("\x1b[" then parameters and a final letter or ~) or an SS3 one ("\x1bO" and a letter).
+SEQUENCE_PATTERN = re.compile(r"\x1b(?:\[[0-9;?]*[@-~]|O[A-Za-z])")
+# Windows reports an arrow as a prefix and a code; these are the codes for up and down.
+WINDOWS_ARROWS = {"H": UP_KEY, "P": DOWN_KEY}
 # How often Windows checks for a key while waiting; it has no select() on the console.
 WINDOWS_POLL_SECONDS = 0.05
 
@@ -19,12 +28,17 @@ WINDOWS_POLL_SECONDS = 0.05
 def split_keys(text):
     """Split what one read returned into keys.
 
-    Arrow and function keys arrive as an escape sequence such as "\\x1b[A"; that comes back as one
-    item, so it can't be mistaken for Esc followed by typed text. A lone "\\x1b" is the Esc key.
+    Arrow and function keys arrive as an escape sequence such as "\\x1b[A"; each comes back as one
+    item, so it can't be mistaken for Esc followed by typed text, and a held arrow key that sent
+    several at once gives several items. Anything else that starts with Esc stays whole.
+    A lone "\\x1b" is the Esc key.
     """
-    if text.startswith(ESCAPE) and len(text) > 1:
-        return [text]
-    return list(text)
+    if not text.startswith(ESCAPE) or len(text) == 1:
+        return list(text)
+    sequences = SEQUENCE_PATTERN.findall(text)
+    if "".join(sequences) == text:
+        return sequences
+    return [text]
 
 
 class KeyReader:
@@ -70,8 +84,10 @@ def read_windows(timeout):
     keys = []
     while msvcrt.kbhit():
         key = msvcrt.getwch()
-        if key in ("\x00", "\xe0"):  # arrow and function keys: a prefix and a code, both ignored
-            msvcrt.getwch()
+        if key in ("\x00", "\xe0"):  # arrow and function keys: a prefix and a code
+            arrow = WINDOWS_ARROWS.get(msvcrt.getwch())
+            if arrow:
+                keys.append(arrow)
             continue
         keys.append(key)
     return keys

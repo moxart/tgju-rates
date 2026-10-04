@@ -1,6 +1,6 @@
 import unittest
 
-from tgju_rates.ansi import DEFAULT_BACKGROUND, DOWN, FLAT, STRIPE, UP
+from tgju_rates.ansi import DEFAULT_BACKGROUND, DOWN, FLAT, SELECTED, STRIPE, UP
 from tgju_rates.holdings import Holding, value_holdings
 from tgju_rates.table import change_style, render_holdings, render_table, sparkline, trend_style
 from tgju_rates.tracking import HIGHLIGHT_SECONDS, PriceTracker
@@ -89,6 +89,12 @@ class AnimationTest(unittest.TestCase):
         rates[0]["price"], rates[1]["price"] = "900", "2,000,500"
         tracker.update(rates, now=10)
         return rates, tracker
+
+    def test_selected_row_is_highlighted(self):
+        rates = [rate("price_eur", "2,923,500"), rate("price_gbp", "3,400,000")]
+        lines = render_table(rates, color=True, selected="price_eur").split("\n")
+        self.assertTrue(lines[2].startswith(SELECTED))
+        self.assertTrue(lines[3].startswith(STRIPE))
 
     def test_flash_sets_a_background_and_hands_it_back_to_the_row(self):
         rates, tracker = self.moved()

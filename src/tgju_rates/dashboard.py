@@ -1,10 +1,18 @@
 """The dashboard: currencies, gold coins, gold and crypto as panels side by side on one screen."""
 
 from tgju_rates.animation import ANIMATION_SECONDS, cell_style, rolled, rolls, uses_background
-from tgju_rates.ansi import BOLD, DEFAULT_BACKGROUND, DOWN, END_CELL, HEADER_STYLE, RESET, STRIPE, UP
+from tgju_rates.ansi import BOLD, DEFAULT_BACKGROUND, DOWN, END_CELL, HEADER_STYLE, RESET, UP
 from tgju_rates.currencies import UNIT_NAMES, display_code, parse_change, rial_to_toman, to_toman
 from tgju_rates.markets import market_of
-from tgju_rates.table import COLUMN_GAP, COLUMN_STYLES, MARKER_WIDTH, change_style, sparkline, trend_style
+from tgju_rates.table import (
+    COLUMN_GAP,
+    COLUMN_STYLES,
+    MARKER_WIDTH,
+    change_style,
+    row_background,
+    sparkline,
+    trend_style,
+)
 from tgju_rates.tracking import TREND_POINTS
 
 # What the dashboard shows without --watch, in this order; panels follow the order of their first code.
@@ -32,7 +40,7 @@ def percent_text(change):
     return f"{parsed[0]:+.2f}%" if parsed else "-"
 
 
-def render_panel(market, rates, *, color, toman=False, tracker=None, now=0.0, animation="off"):
+def render_panel(market, rates, *, color, toman=False, tracker=None, now=0.0, animation="off", selected=None):
     """One market's panel as (lines, width); every line is padded to ``width`` visible columns."""
     header = ["CODE", f"PRICE ({UNIT_NAMES[toman].upper()})", "CHANGE"]
     aligns = "<>>"
@@ -68,7 +76,7 @@ def render_panel(market, rates, *, color, toman=False, tracker=None, now=0.0, an
         if not color:
             lines.append(f" {arrow} " + COLUMN_GAP.join(cells(row)))
             continue
-        background = STRIPE if index % 2 else DEFAULT_BACKGROUND
+        background = row_background(index, rate["key"], selected)
         styles = [COLUMN_STYLES[0], f"{BOLD}{tint}" if tint else BOLD, change_style(rate["change"])]
         if tracker is not None:
             styles.append(trend_style(tracker.trends.get(rate["key"], ())))
@@ -80,10 +88,9 @@ def render_panel(market, rates, *, color, toman=False, tracker=None, now=0.0, an
                 row[1] = rolled(f"{rial_to_toman(old) if toman else old:,}", row[1], age)
             styles[1] = cell_style(animation, direction, age) or styles[1]
             if uses_background(animation):
-                ends[1] = END_CELL + background
+                ends[1] = END_CELL + (background or DEFAULT_BACKGROUND)
         marker = f" {tint}{BOLD}{arrow}{END_CELL} " if tint else "   "
-        stripe = STRIPE if index % 2 else ""
-        lines.append(f"{stripe}{marker}{styled(cells(row), styles, ends)}{RESET}")
+        lines.append(f"{background}{marker}{styled(cells(row), styles, ends)}{RESET}")
     return lines, width
 
 
@@ -102,10 +109,12 @@ def arrange(panels, width):
     return [], []
 
 
-def render_dashboard(rates, *, color, toman=False, tracker=None, now=0.0, animation="off", width=80):
+def render_dashboard(rates, *, color, toman=False, tracker=None, now=0.0, animation="off", width=80, selected=None):
     """The rates as one panel per market, laid out in a grid as wide as ``width`` allows."""
     panels = [
-        render_panel(market, group, color=color, toman=toman, tracker=tracker, now=now, animation=animation)
+        render_panel(
+            market, group, color=color, toman=toman, tracker=tracker, now=now, animation=animation, selected=selected
+        )
         for market, group in group_by_market(rates)
     ]
     rows, columns = arrange(panels, width)

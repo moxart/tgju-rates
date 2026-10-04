@@ -17,6 +17,7 @@ from tgju_rates.dashboard import DASHBOARD_CODES
 from tgju_rates.doctor import run_doctor
 from tgju_rates.history import History, default_path
 from tgju_rates.holdings import default_holdings_path, load_holdings, merge_holdings, parse_holding
+from tgju_rates.jewelry import parse_piece, run_jewelry
 from tgju_rates.markets import CURRENCY, FEED_MARKETS, MARKETS, market_of, parse_markets
 from tgju_rates.source import apply_live_prices, fetch_live_prices, load_markets
 
@@ -57,6 +58,14 @@ def convert_argument(text):
     return text
 
 
+def jewelry_argument(text):
+    try:
+        parse_piece(text)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from None
+    return text
+
+
 def market_codes_epilog():
     lines = [f"{market:<7} {', '.join(item.code for item in items)}" for market, items in FEED_MARKETS.items()]
     return "codes beyond currencies:\n  " + "\n  ".join(lines)
@@ -79,6 +88,11 @@ def build_parser():
     parser.add_argument("--once", action="store_true", help="print the table once and exit")
     parser.add_argument("--persian", action="store_true", help="also show the Persian names from the page")
     parser.add_argument("--toman", action="store_true", help="show prices in toman, and read --alert limits as toman")
+    parser.add_argument(
+        "--jalali",
+        action="store_true",
+        help="show dates in the Persian (Jalali) calendar, e.g. 1405/07/12, in history, charts and live mode",
+    )
     parser.add_argument(
         "--json", action="store_true", help="print JSON instead of a table (one JSON object per update when live)"
     )
@@ -149,6 +163,13 @@ def build_parser():
         type=convert_argument,
         help='convert an amount and exit, e.g. "250 usd", "250 usd eur" or "50,000,000 toman to btc"',
     )
+    parser.add_argument(
+        "--jewelry",
+        metavar="TEXT",
+        type=jewelry_argument,
+        help='price an 18k gold piece and exit, e.g. "12.5g wage 18%%" (also profit N%%, default 7%%, '
+        "and tax N%%, default 10%%)",
+    )
     parser.add_argument("--doctor", action="store_true", help="check that tgju.org still works with this program")
     parser.add_argument("--completion", choices=SHELLS, help="print a shell completion script and exit")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -187,7 +208,12 @@ def main(argv=None):
     if (args.chart or args.csv) and not args.history:
         parser.error("--chart and --csv go with --history")
     options = Options(
-        persian=args.persian, toman=args.toman, json=args.json, animation=args.animation, dashboard=args.dashboard
+        persian=args.persian,
+        toman=args.toman,
+        json=args.json,
+        animation=args.animation,
+        dashboard=args.dashboard,
+        jalali=args.jalali,
     )
     db_path = args.db or default_path()
 
@@ -204,10 +230,13 @@ def main(argv=None):
         finally:
             history.close()
         return
-    if args.convert:
+    if args.convert or args.jewelry:
         history = existing_history(db_path)
         try:
-            error = run_convert(args.convert, history, as_json=args.json)
+            if args.convert:
+                error = run_convert(args.convert, history, as_json=args.json)
+            else:
+                error = run_jewelry(args.jewelry, history, toman=args.toman, as_json=args.json)
         finally:
             if history is not None:
                 history.close()

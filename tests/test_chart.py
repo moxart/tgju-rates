@@ -40,6 +40,13 @@ class DailySummaryTest(unittest.TestCase):
         self.assertEqual(lines[0].split(), ["DATE", "OPEN", "LOW", "HIGH", "CLOSE", "CHANGE"])
         self.assertTrue(lines[2].endswith("+30 (+33.3%)"))
 
+    def test_summary_in_jalali_and_limited_to_the_last_days(self):
+        points = [(at("2026-10-03 09:00"), 100), (at("2026-10-04 10:00"), 120)]
+        lines = daily_summary(points, jalali=True, last=1).splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[1].startswith("1405/07/12"))
+        self.assertTrue(lines[1].endswith("+20 (+20.0%)"))  # still measured from the hidden day
+
 
 if __name__ == "__main__":
     unittest.main()

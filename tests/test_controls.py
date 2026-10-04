@@ -96,6 +96,33 @@ class LiveControlsTest(unittest.TestCase):
         press(controls, ["/", "\x1b[A", "e"])
         self.assertEqual(controls.filter, "e")
 
+    def test_arrows_move_within_the_visible_rows(self):
+        controls = LiveControls()
+        visible = ["price_eur", "price_gbp", "price_aed"]
+        controls.handle("\x1b[A", visible)
+        self.assertEqual(controls.selected, "price_aed")  # up with nothing selected starts at the bottom
+        for _ in range(3):
+            controls.handle("\x1b[B", visible)
+        self.assertEqual(controls.selected, "price_aed")  # stays on the last row
+        controls.handle("\x1b[A", visible)
+        self.assertEqual(controls.selected, "price_gbp")
+        controls.handle("\x1b[B", ["price_eur"])  # filtered out: start again from the top
+        self.assertEqual(controls.selected, "price_eur")
+
+    def test_enter_opens_details_esc_closes_them_then_clears_the_selection(self):
+        controls = LiveControls()
+        controls.handle("\r", [])
+        self.assertFalse(controls.detail)
+        controls.handle("\r", ["price_eur", "price_gbp"])
+        self.assertEqual((controls.selected, controls.detail), ("price_eur", True))
+        for key in "ds/":
+            controls.handle(key, ["price_eur"])
+        self.assertEqual((controls.detail_days, controls.sort, controls.editing), (7, 0, False))
+        controls.handle("\x1b")
+        self.assertEqual((controls.selected, controls.detail), ("price_eur", False))
+        controls.handle("\x1b")
+        self.assertIsNone(controls.selected)
+
     def test_quit(self):
         controls = LiveControls()
         press(controls, "q")

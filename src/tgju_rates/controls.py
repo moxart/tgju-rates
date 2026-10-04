@@ -1,13 +1,17 @@
-"""What the keyboard can change in live mode: unit, sort order, filter, converter, animation, pause."""
+"""What the keyboard can change in live mode: unit, sort order, filter, converter, animation, pause, and
+the selected row with its detail view."""
 
 from tgju_rates.animation import ANIMATIONS, DEFAULT_ANIMATION
 from tgju_rates.currencies import display_code, english_name, parse_change, parse_rial
-from tgju_rates.keys import ESCAPE
+from tgju_rates.keys import DOWN_KEYS, ESCAPE, UP_KEYS
 
 SORT_MODES = ("site order", "biggest move", "price")
 BACKSPACE = ("\x7f", "\b")
 ENTER = ("\r", "\n")
-KEY_HELP = "t toman/rial  s sort  / filter  c convert  a animation  p pause  q quit"
+KEY_HELP = "↑↓ select  Enter details  t toman/rial  s sort  / filter  c convert  a animation  p pause  q quit"
+DETAIL_KEY_HELP = "↑↓ previous/next  d 1/7/30 days  Esc back  t toman/rial  p pause  q quit"
+# How far back the detail view's chart goes; "d" cycles through these.
+DETAIL_DAYS = (1, 7, 30)
 
 
 def edit_text(text, key):
@@ -47,13 +51,30 @@ class LiveControls:
         self.converting = False
         self.paused = False
         self.quit = False
+        # The highlighted row's key (None until an arrow is pressed), and whether its detail view is open.
+        self.selected = None
+        self.detail = False
+        self.detail_days = DETAIL_DAYS[0]
 
-    def handle(self, key):
+    def handle(self, key, visible=()):
+        """Apply one key. ``visible`` is the shown rows' keys in screen order, for the arrows and Enter."""
         # While a line is being typed, every key (q included) goes into it.
         if self.editing:
             self.filter, self.editing = edit_text(self.filter, key)
         elif self.converting:
             self.conversion, self.converting = edit_text(self.conversion, key)
+        elif key in UP_KEYS or key in DOWN_KEYS:
+            self.move(visible, -1 if key in UP_KEYS else 1)
+        elif key in ENTER:
+            if self.selected not in visible:
+                self.selected = visible[0] if visible else None
+            self.detail = self.selected is not None
+        elif self.detail and key == ESCAPE:
+            self.detail = False
+        elif self.detail and key == "d":
+            self.detail_days = DETAIL_DAYS[(DETAIL_DAYS.index(self.detail_days) + 1) % len(DETAIL_DAYS)]
+        elif self.detail and key in ("s", "/", "c"):
+            pass  # the table they change isn't on screen
         elif key == "t":
             self.toman = not self.toman
         elif key == "s":
@@ -66,10 +87,20 @@ class LiveControls:
             self.converting = True
         elif key == ESCAPE:
             self.filter = self.conversion = ""
+            self.selected = None
         elif key == "p":
             self.paused = not self.paused
         elif key == "q":
             self.quit = True
+
+    def move(self, visible, step):
+        """Select the next (``step`` 1) or previous (-1) visible row, starting from the top or bottom."""
+        if not visible:
+            return
+        if self.selected not in visible:
+            self.selected = visible[0] if step > 0 else visible[-1]
+        else:
+            self.selected = visible[max(0, min(len(visible) - 1, visible.index(self.selected) + step))]
 
     def apply(self, rates):
         """The rates to show: filtered by code or English name, then sorted."""

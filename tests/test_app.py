@@ -161,6 +161,39 @@ class HistoryCsvTest(unittest.TestCase):
         self.assertTrue(lines[1].endswith(",EUR,100"))
         self.assertEqual(len(lines), 3)
 
+    def test_jalali_adds_a_column(self):
+        lines = history_csv("price_eur", [(0, 1005)], jalali=True).splitlines()
+        self.assertEqual(lines[0], "time,jalali_time,code,price_rial")
+        self.assertRegex(lines[1], r",13\d\d/\d\d/\d\d \d\d:\d\d:\d\d,EUR,1005$")
+
+
+@mock.patch("tgju_rates.app.terminal_width", return_value=80)
+@mock.patch("tgju_rates.app.fetch_live_prices", return_value={"current": {}})
+class DetailViewTest(unittest.TestCase):
+    def run_keys(self, history, *batches):
+        rates = [rate("price_eur", "2,900,000"), rate("price_gbp", "3,400,000")]
+        session = LiveSession(rates, rates, [parse_alert("gbp>3000000")], 10, Options(), color=False, history=history)
+        frames = []
+        session.run(frames.append, FakeKeys(*batches))
+        return frames
+
+    def test_arrows_and_enter_open_the_selected_rate_with_its_chart(self, _fetch, _width):
+        history = History.open(":memory:")
+        self.addCleanup(history.close)
+        frames = self.run_keys(history, ["\x1b[B", "\x1b[B"], ["\r"], ["d"], ["\x1b"])
+        # Frames: the first poll, then one per batch of keys.
+        self.assertIn("GBP  British Pound", frames[2])
+        self.assertIn("alerts: GBP > 3,000,000", frames[2])
+        self.assertIn("GBP (British Pound), last 1 day(s)", frames[2])
+        self.assertIn("Esc back", frames[2])
+        self.assertIn("last 7 day(s)", frames[3])
+        self.assertIn("PRICE (RIAL)", frames[4])  # Esc went back to the table
+
+    def test_without_history_says_why_there_is_no_chart(self, _fetch, _width):
+        frames = self.run_keys(None, ["\r"])
+        self.assertIn("EUR  Euro", frames[1])
+        self.assertIn("History is off", frames[1])
+
 
 if __name__ == "__main__":
     unittest.main()

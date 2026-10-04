@@ -11,6 +11,12 @@ class SplitKeysTest(unittest.TestCase):
     def test_escape_sequence_stays_whole(self):
         self.assertEqual(split_keys("\x1b[A"), ["\x1b[A"])
 
+    def test_held_arrow_gives_one_key_per_press(self):
+        self.assertEqual(split_keys("\x1b[B\x1b[B\x1bOA"), ["\x1b[B", "\x1b[B", "\x1bOA"])
+
+    def test_unknown_escape_text_stays_whole(self):
+        self.assertEqual(split_keys("\x1bxy"), ["\x1bxy"])
+
     def test_lone_escape(self):
         self.assertEqual(split_keys("\x1b"), ["\x1b"])
 

@@ -151,24 +151,39 @@ def saved_prices(history, keys):
     return {key: price for key, (_, price) in found.items()}, oldest
 
 
-def run_convert(text, history=None, as_json=False):
-    """Print the conversion; returns an error message instead when it can't be done."""
-    conversion = parse_conversion(text)
-    keys = [unit for unit in (conversion.source, conversion.target) if unit and unit not in MONEY_UNITS]
-    note = ""
+def prices_for(keys, history):
+    """({key: rial price}, note): from the feed, else the history file, with a note saying so.
+
+    A key with no price either way is left out; see missing_prices.
+    """
     try:
-        prices = live_prices(keys)
+        return live_prices(keys), ""
     except (OSError, ValueError, KeyError) as error:
         try:
             prices, oldest = saved_prices(history, keys)
         except sqlite3.Error:
             prices, oldest = {}, None
         when = f" from {datetime.fromtimestamp(oldest):%Y-%m-%d %H:%M}" if oldest else ""
-        note = f"Feed unavailable ({error}); using saved prices{when}."
+        return prices, f"Feed unavailable ({error}); using saved prices{when}."
+
+
+def missing_prices(keys, prices, note):
+    """The error message for keys without a price, or None when every key has one."""
     missing = [key for key in keys if key not in prices]
-    if missing:
-        codes = ", ".join(display_code(key).lower() for key in missing)
-        return f"No price for {codes}." + (f" {note}" if note else "")
+    if not missing:
+        return None
+    codes = ", ".join(display_code(key).lower() for key in missing)
+    return f"No price for {codes}." + (f" {note}" if note else "")
+
+
+def run_convert(text, history=None, as_json=False):
+    """Print the conversion; returns an error message instead when it can't be done."""
+    conversion = parse_conversion(text)
+    keys = [unit for unit in (conversion.source, conversion.target) if unit and unit not in MONEY_UNITS]
+    prices, note = prices_for(keys, history)
+    error = missing_prices(keys, prices, note)
+    if error:
+        return error
     results = convert(conversion, prices)
     show = conversion_json if as_json else format_conversion
     print(show(conversion, results, prices, note))

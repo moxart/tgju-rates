@@ -1,7 +1,7 @@
 """Rendering the rates as an aligned, optionally coloured text table."""
 
 from tgju_rates.animation import ANIMATION_SECONDS, cell_style, rolled, rolls, uses_background
-from tgju_rates.ansi import BOLD, DEFAULT_BACKGROUND, DOWN, END_CELL, FLAT, HEADER_STYLE, RESET, STRIPE, UP
+from tgju_rates.ansi import BOLD, DEFAULT_BACKGROUND, DOWN, END_CELL, FLAT, HEADER_STYLE, RESET, SELECTED, STRIPE, UP
 from tgju_rates.currencies import change_in_toman, display_code, english_name, rial_to_toman, to_toman
 from tgju_rates.tracking import TREND_POINTS
 
@@ -77,7 +77,14 @@ def price_texts(rial, toman):
     return texts[::-1] if toman else texts
 
 
-def render_table(rates, *, color, persian=False, toman=False, tracker=None, now=0.0, animation="off"):
+def row_background(index, key, selected):
+    """The background a row is drawn on: the selection's, the stripe on every other row, or "" for none."""
+    if key == selected:
+        return SELECTED
+    return STRIPE if index % 2 else ""
+
+
+def render_table(rates, *, color, persian=False, toman=False, tracker=None, now=0.0, animation="off", selected=None):
     """Return the table as a string.
 
     With ``toman``, prices, change, low and high are in toman and the rial price is the second column.
@@ -87,6 +94,8 @@ def render_table(rates, *, color, persian=False, toman=False, tracker=None, now=
 
     With ``persian``, the Persian names go in a last column, so right-to-left text doesn't break the
     alignment of the columns before it.
+
+    ``selected`` is the key of a row to highlight (only with ``color``).
     """
     header = list(TOMAN_HEADER if toman else BASE_HEADER)
     aligns = COLUMN_ALIGNS
@@ -133,6 +142,7 @@ def render_table(rates, *, color, persian=False, toman=False, tracker=None, now=
         else:
             marker = "   "
         ends = [END_CELL] * len(row)
+        background = row_background(index, rate["key"], selected)
         playing = tracker.recent_change(rate["key"], now, ANIMATION_SECONDS) if color and tracker else None
         if playing and animation != "off":
             direction, old, age = playing
@@ -142,10 +152,9 @@ def render_table(rates, *, color, persian=False, toman=False, tracker=None, now=
                 styles[column] = cell_style(animation, direction, age) or styles[column]
                 if uses_background(animation):
                     # Hand the background back to the row, or the flash would run on into the next cells.
-                    ends[column] = END_CELL + (STRIPE if index % 2 else DEFAULT_BACKGROUND)
+                    ends[column] = END_CELL + (background or DEFAULT_BACKGROUND)
         if color:
-            stripe = STRIPE if index % 2 else ""
-            lines.append(f"{stripe}{marker}{line(row, styles, ends)} {RESET}")
+            lines.append(f"{background}{marker}{line(row, styles, ends)} {RESET}")
         else:
             lines.append((marker + line(row)).rstrip())
     return "\n".join(lines)

@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from tgju_rates.ansi import DOWN, FLAT, RESET, UP
+from tgju_rates.dates import format_date, format_stamp
 
 CHART_HEIGHT = 12
 # Eighths of a cell, so each row of the chart has eight steps of height.
@@ -29,7 +30,7 @@ def direction_style(first, last):
     return FLAT if first == last else UP if last > first else DOWN
 
 
-def render_chart(values, start, end, *, height=CHART_HEIGHT, color=False):
+def render_chart(values, start, end, *, height=CHART_HEIGHT, color=False, jalali=False):
     """A filled chart of ``values`` (one per column, None for no data), with price labels and the time span."""
     known = [value for value in values if value is not None]
     low, high = min(known), max(known)
@@ -55,8 +56,10 @@ def render_chart(values, start, end, *, height=CHART_HEIGHT, color=False):
         axis = "┤" if row in labels else "│"
         lines.append(f"{labels.get(row, ''):>{label_width}} {axis}{style}{cells}{end_style}".rstrip())
     lines.append(f"{'':>{label_width}} └{'─' * len(values)}")
-    time_format = "%H:%M" if end - start <= 86400 else "%Y-%m-%d %H:%M"
-    left, right = (datetime.fromtimestamp(stamp).strftime(time_format) for stamp in (start, end))
+    if end - start <= 86400:
+        left, right = (f"{datetime.fromtimestamp(stamp):%H:%M}" for stamp in (start, end))
+    else:
+        left, right = (format_stamp(stamp, jalali) for stamp in (start, end))
     gap = max(1, len(values) - len(left) - len(right))
     lines.append(f"{'':>{label_width}}  {left}{' ' * gap}{right}")
     return "\n".join(lines)
@@ -70,8 +73,11 @@ def daily_rows(points):
     return [(day, prices[0], min(prices), max(prices), prices[-1]) for day, prices in days.items()]
 
 
-def daily_summary(points, *, color=False):
-    """One line per day: open, low, high, close, and the close's change from the day before."""
+def daily_summary(points, *, color=False, jalali=False, last=None):
+    """One line per day: open, low, high, close, and the close's change from the day before.
+
+    With ``last``, only the most recent ``last`` days are listed (their changes still count the day before).
+    """
     header = ("DATE", "OPEN", "LOW", "HIGH", "CLOSE", "CHANGE")
     rows, styles, previous = [], [], None
     for day, opened, low, high, close in daily_rows(points):
@@ -80,8 +86,10 @@ def daily_summary(points, *, color=False):
             percent = (close - previous) / previous * 100 if previous else 0.0
             change = f"{close - previous:+,} ({percent:+.1f}%)"
         styles.append(direction_style(previous, close) if previous is not None else "")
-        rows.append([day.isoformat(), f"{opened:,}", f"{low:,}", f"{high:,}", f"{close:,}", change])
+        rows.append([format_date(day, jalali), f"{opened:,}", f"{low:,}", f"{high:,}", f"{close:,}", change])
         previous = close
+    if last is not None:
+        rows, styles = rows[-last:], styles[-last:]
     widths = [max(len(row[i]) for row in (header, *rows)) for i in range(len(header))]
 
     def line(cells):
