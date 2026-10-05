@@ -8,8 +8,48 @@ from tgju_rates.keys import DOWN_KEYS, ESCAPE, UP_KEYS
 SORT_MODES = ("site order", "biggest move", "price")
 BACKSPACE = ("\x7f", "\b")
 ENTER = ("\r", "\n")
-KEY_HELP = "↑↓ select  Enter details  t toman/rial  s sort  / filter  c convert  a animation  p pause  q quit"
-DETAIL_KEY_HELP = "↑↓ previous/next  d 1/7/30 days  Esc back  t toman/rial  p pause  q quit"
+HELP_KEY = "?"
+# The key bar at the bottom of the live screen: (key, what it does) for the current mode.
+KEY_HINTS = (
+    ("↑↓", "select"),
+    ("Enter", "details"),
+    ("t", "toman/rial"),
+    ("s", "sort"),
+    ("/", "filter"),
+    ("c", "convert"),
+    ("a", "animation"),
+    ("m", "mute alerts"),
+    ("p", "pause"),
+    ("?", "help"),
+    ("q", "quit"),
+)
+DETAIL_KEY_HINTS = (
+    ("↑↓", "prev/next"),
+    ("d", "1/7/30 days"),
+    ("Esc", "back"),
+    ("t", "toman/rial"),
+    ("p", "pause"),
+    ("?", "help"),
+    ("q", "quit"),
+)
+TYPING_KEY_HINTS = (("Enter", "keep"), ("Esc", "clear"), ("Backspace", "delete"))
+HELP_KEY_HINTS = (("Esc", "close"), ("q", "quit"))
+# The ? overlay: every key, with a longer description than the key bar has room for.
+HELP_LINES = (
+    ("↑ ↓", "select a row, in the table or the dashboard"),
+    ("Enter", "open the selected row: price, low/high, its alerts and a chart"),
+    ("d", "in the details, show the last 1, 7 or 30 days"),
+    ("t", "switch between toman and rial (alert limits keep their unit)"),
+    ("s", "sort: site order, biggest move today, highest price"),
+    ("/", "filter by code or name as you type; Enter keeps it, Esc clears it"),
+    ("c", "convert, e.g. 250 usd eur; updates as you type and on every poll"),
+    ("a", "next price animation: flash, glow, roll, board, off"),
+    ("m", "mute alerts: no notifications, and the ALERT lines are cleared; m again unmutes"),
+    ("p", "pause and resume updates"),
+    ("Esc", "close the details; else clear the filter, converter and selection"),
+    ("?", "show or hide this help"),
+    ("q", "quit (Ctrl+C works too)"),
+)
 # How far back the detail view's chart goes; "d" cycles through these.
 DETAIL_DAYS = (1, 7, 30)
 
@@ -55,6 +95,10 @@ class LiveControls:
         self.selected = None
         self.detail = False
         self.detail_days = DETAIL_DAYS[0]
+        # Whether alerts are muted ("m"): they're still checked, but neither notified nor listed.
+        self.muted = False
+        # Whether the ? overlay is open.
+        self.help = False
 
     def handle(self, key, visible=()):
         """Apply one key. ``visible`` is the shown rows' keys in screen order, for the arrows and Enter."""
@@ -63,6 +107,14 @@ class LiveControls:
             self.filter, self.editing = edit_text(self.filter, key)
         elif self.converting:
             self.conversion, self.converting = edit_text(self.conversion, key)
+        elif self.help:
+            # The overlay covers the table, so only closing it and quitting do anything.
+            if key in (HELP_KEY, ESCAPE):
+                self.help = False
+            elif key == "q":
+                self.quit = True
+        elif key == HELP_KEY:
+            self.help = True
         elif key in UP_KEYS or key in DOWN_KEYS:
             self.move(visible, -1 if key in UP_KEYS else 1)
         elif key in ENTER:
@@ -88,10 +140,24 @@ class LiveControls:
         elif key == ESCAPE:
             self.filter = self.conversion = ""
             self.selected = None
+        elif key == "m":
+            self.muted = not self.muted
         elif key == "p":
             self.paused = not self.paused
         elif key == "q":
             self.quit = True
+
+    def hints(self):
+        """The (key, action) pairs that apply right now, for the key bar."""
+        if self.editing or self.converting:
+            return TYPING_KEY_HINTS
+        if self.help:
+            return HELP_KEY_HINTS
+        if self.detail:
+            return DETAIL_KEY_HINTS
+        if self.muted:
+            return tuple((key, "unmute alerts") if key == "m" else (key, action) for key, action in KEY_HINTS)
+        return KEY_HINTS
 
     def move(self, visible, step):
         """Select the next (``step`` 1) or previous (-1) visible row, starting from the top or bottom."""

@@ -10,13 +10,14 @@ from datetime import datetime
 from pathlib import Path
 
 from tgju_rates.ansi import DOWN, RESET, UP
+from tgju_rates.ansi import WARN as WARN_STYLE
+from tgju_rates.config import read_config
 from tgju_rates.currencies import ENGLISH_NAMES, display_code, parse_rial
 from tgju_rates.holdings import load_holdings
 from tgju_rates.markets import FEED_MARKETS
 from tgju_rates.source import FEED_URL, PAGE_URL, fetch_live_prices, scrape_page_rates
 
 OK, WARN, FAIL = "ok", "warn", "FAIL"
-WARN_STYLE = "\033[38;5;214m"
 MARK_STYLES = {OK: UP, WARN: WARN_STYLE, FAIL: DOWN}
 
 
@@ -91,7 +92,20 @@ def check_holdings(path):
     return [(OK, f"holdings: {len(holdings)} in {path} ({codes(holding.key for holding in holdings)})")]
 
 
-def run_doctor(history_path, holdings_path, color=False):
+def check_config(path):
+    """Whether the settings file reads. Values are checked against the options when the program starts."""
+    if path is None:
+        return []
+    try:
+        values = read_config(path)
+    except (OSError, ValueError) as error:
+        return [(FAIL, f"settings: {path}: {error}")]
+    if not values:
+        return [(OK, f"settings: none ({path} doesn't exist or sets nothing)")]
+    return [(OK, f"settings: {', '.join(values)} from {path}")]
+
+
+def run_doctor(history_path, holdings_path, config_path=None, color=False):
     """Run every check and print the results; returns the process exit code (1 if anything failed)."""
     results, rates = check_page()
     feed_results, live = check_feed()
@@ -103,6 +117,7 @@ def run_doctor(history_path, holdings_path, color=False):
             results += check_feed_entries([item.key for item in items], live, market)
     results += check_history(history_path)
     results += check_holdings(holdings_path)
+    results += check_config(config_path)
     for status, message in results:
         mark = f"{status:<4}"
         if color:

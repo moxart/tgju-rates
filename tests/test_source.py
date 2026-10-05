@@ -1,6 +1,10 @@
+import gzip
 import unittest
+from email.message import Message
+from unittest import mock
+from urllib.error import HTTPError, URLError
 
-from tgju_rates.source import apply_live_prices, parse_page_rates
+from tgju_rates.source import apply_live_prices, fetch, parse_page_rates
 
 PAGE = """
 <table>
@@ -63,6 +67,62 @@ class ApplyLivePricesTest(unittest.TestCase):
         rates = [{"key": "price_eur", "price": "1"}]
         apply_live_prices(rates, {})
         self.assertEqual(rates[0]["price"], "1")
+
+
+class FakeResponse:
+    def __init__(self, body, encoding=None):
+        self.body = body
+        self.headers = Message()
+        if encoding:
+            self.headers["Content-Encoding"] = encoding
+
+    def read(self):
+        return self.body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+
+@mock.patch("tgju_rates.source.time.sleep")
+class FetchTest(unittest.TestCase):
+    def test_asks_for_gzip_and_decompresses_it(self, _sleep):
+        response = FakeResponse(gzip.compress("سلام".encode()), encoding="gzip")
+        with mock.patch("tgju_rates.source.urlopen", return_value=response) as urlopen:
+            self.assertEqual(fetch("https://example.test/"), "سلام")
+        self.assertEqual(urlopen.call_args[0][0].get_header("Accept-encoding"), "gzip")
+
+    def test_plain_response_is_read_as_is(self, _sleep):
+        with mock.patch("tgju_rates.source.urlopen", return_value=FakeResponse(b"{}")):
+            self.assertEqual(fetch("https://example.test/"), "{}")
+
+    def test_network_error_is_retried_once(self, sleep):
+        attempts = [URLError("reset"), FakeResponse(b"ok")]
+        with mock.patch("tgju_rates.source.urlopen", side_effect=attempts):
+            self.assertEqual(fetch("https://example.test/"), "ok")
+        sleep.assert_called_once()
+
+    def test_gives_up_after_the_last_attempt(self, _sleep):
+        with mock.patch("tgju_rates.source.urlopen", side_effect=URLError("down")) as urlopen:
+            with self.assertRaises(URLError):
+                fetch("https://example.test/", attempts=3)
+        self.assertEqual(urlopen.call_count, 3)
+
+    def test_http_error_is_not_retried(self, sleep):
+        error = HTTPError("https://example.test/", 403, "Forbidden", Message(), None)
+        with mock.patch("tgju_rates.source.urlopen", side_effect=error) as urlopen:
+            with self.assertRaises(HTTPError):
+                fetch("https://example.test/")
+        self.assertEqual(urlopen.call_count, 1)
+        sleep.assert_not_called()
+
+    def test_truncated_gzip_is_a_network_error(self, _sleep):
+        broken = FakeResponse(gzip.compress(b"x" * 100)[:-10], encoding="gzip")
+        with mock.patch("tgju_rates.source.urlopen", return_value=broken):
+            with self.assertRaises(OSError):
+                fetch("https://example.test/", attempts=1)
 
 
 if __name__ == "__main__":

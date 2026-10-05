@@ -3,8 +3,16 @@ from contextlib import redirect_stderr
 from io import StringIO
 from unittest import mock
 
-from tgju_rates.cli import build_parser, exit_if_unknown, load_rates, main, parse_watch
+from tgju_rates.ansi import use_color
+from tgju_rates.cli import EXIT_INTERRUPTED, build_parser, exit_if_unknown, load_rates, main, parse_watch
 from tgju_rates.history import History
+
+
+def setUpModule():
+    # Keep a settings file in the developer's home from changing what main() does here.
+    patcher = mock.patch("tgju_rates.cli.default_config_path", return_value="/nonexistent/config.ini")
+    patcher.start()
+    unittest.addModuleCleanup(patcher.stop)
 
 
 class CliTest(unittest.TestCase):
@@ -51,6 +59,12 @@ class CliTest(unittest.TestCase):
             main(["--once", "--no-record", "--watch", "usd,emami"])
         self.assertEqual(load.call_args[0][0], ["currency", "coin"])
 
+    def test_no_alerts_ignores_every_alert(self):
+        with mock.patch("tgju_rates.cli.load_rates", return_value=({}, "")):
+            with mock.patch("tgju_rates.cli.run_once") as run_once:
+                main(["--once", "--no-record", "--alert", "usd>1", "--alert", "total>1", "--no-alerts"])
+        self.assertEqual(run_once.call_args[0][2], [])
+
     def test_dashboard_loads_every_market_unless_market_narrows_it(self):
         for argv, markets in (([], ["currency", "coin", "gold", "crypto"]), (["--market", "coin"], ["coin"])):
             with self.subTest(argv=argv), mock.patch("tgju_rates.cli.load_rates", return_value=({}, "")) as load:
@@ -58,6 +72,42 @@ class CliTest(unittest.TestCase):
                     main(["--dashboard", "--once", "--no-record", *argv])
                 self.assertEqual(load.call_args[0][0], markets)
                 self.assertEqual(run_once.call_args[0][1], [])  # nothing loaded, so nothing shown
+
+
+class MainErrorsTest(unittest.TestCase):
+    def test_unexpected_error_is_a_short_message(self):
+        with mock.patch("tgju_rates.cli.run_doctor", side_effect=RuntimeError("boom")):
+            with self.assertRaises(SystemExit) as raised:
+                main(["--doctor"])
+        self.assertIn("unexpected error: RuntimeError: boom", raised.exception.code)
+        self.assertIn("--debug", raised.exception.code)
+
+    def test_debug_shows_the_traceback(self):
+        with mock.patch("tgju_rates.cli.run_doctor", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                main(["--doctor", "--debug"])
+
+    def test_ctrl_c_exits_with_130(self):
+        with mock.patch("tgju_rates.cli.run_doctor", side_effect=KeyboardInterrupt):
+            with self.assertRaises(SystemExit) as raised:
+                main(["--doctor"])
+        self.assertEqual(raised.exception.code, EXIT_INTERRUPTED)
+
+
+class UseColorTest(unittest.TestCase):
+    def check(self, mode, env, tty):
+        stream = mock.Mock(isatty=lambda: tty)
+        with mock.patch.dict("os.environ", env, clear=True):
+            return use_color(mode, stream)
+
+    def test_modes_and_environment(self):
+        self.assertTrue(self.check("auto", {}, tty=True))
+        self.assertFalse(self.check("auto", {}, tty=False))
+        self.assertFalse(self.check("auto", {"NO_COLOR": "1"}, tty=True))
+        self.assertFalse(self.check("auto", {"TERM": "dumb"}, tty=True))
+        self.assertTrue(self.check("auto", {"FORCE_COLOR": "1"}, tty=False))
+        self.assertTrue(self.check("always", {"NO_COLOR": "1"}, tty=False))
+        self.assertFalse(self.check("never", {"FORCE_COLOR": "1"}, tty=True))
 
 
 @mock.patch("tgju_rates.cli.fetch_live_prices", side_effect=OSError("feed down"))

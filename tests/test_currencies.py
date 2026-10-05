@@ -1,10 +1,10 @@
 import unittest
 
 from tgju_rates.currencies import (
-    change_in_toman,
     display_code,
     english_name,
     format_amount,
+    format_change,
     parse_change,
     parse_rial,
     rial_to_toman,
@@ -53,10 +53,12 @@ class ChangeTest(unittest.TestCase):
         self.assertIsNone(parse_change("-"))
         self.assertIsNone(parse_change("(1.2.3%) 5"))
 
-    def test_change_in_toman(self):
-        self.assertEqual(change_in_toman("(-0.8%) -23,500"), "(-0.8%) -2,350")
-        self.assertEqual(change_in_toman("(0%) 0"), "(0%) 0")
-        self.assertEqual(change_in_toman("n/a"), "n/a")
+    def test_format_change_signs_amount_and_percent(self):
+        self.assertEqual(format_change("(0.15%) 4,000"), "+4,000 (+0.15%)")
+        self.assertEqual(format_change("(-0.8%) -23,500"), "-23,500 (-0.8%)")
+        self.assertEqual(format_change("(-0.8%) -23,500", toman=True), "-2,350 (-0.8%)")
+        self.assertEqual(format_change("(0%) 0"), "0 (0%)")
+        self.assertEqual(format_change("n/a"), "n/a")
 
 
 if __name__ == "__main__":

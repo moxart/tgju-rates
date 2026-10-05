@@ -6,9 +6,11 @@ Both sources key each currency by the same row key, e.g. ``price_eur``. Gold coi
 aren't scraped: their rows are built from the feed and the list in markets.py.
 """
 
+import gzip
 import json
 import time
 from html.parser import HTMLParser
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from tgju_rates.markets import CURRENCY, FEED_MARKETS
@@ -18,6 +20,10 @@ PAGE_URL = "https://www.tgju.org/currency"
 FEED_URL = "https://call1.tgju.org/ajax.json"
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 REQUEST_TIMEOUT = 20
+# A request that fails on the network (not with an HTTP error) is tried this many times in all, waiting
+# RETRY_WAIT seconds in between, so one dropped connection at startup doesn't fall back to saved prices.
+ATTEMPTS = 2
+RETRY_WAIT = 1.5
 
 # Cells in each page row, in page order (the last chart-link cell is dropped).
 FIELDS = ("name", "price", "change", "low", "high", "time")
@@ -57,13 +63,33 @@ class CurrencyTableParser(HTMLParser):
                 self.rates.append({"key": row["key"], **dict(zip(FIELDS, row["cells"]))})
 
 
-def fetch(url):
+def fetch(url, attempts=ATTEMPTS, wait=RETRY_WAIT):
+    """GET ``url`` as text. Responses are gzipped when the server agrees, which makes the feed ~7x smaller."""
     request = Request(
         url,
-        headers={"User-Agent": USER_AGENT, "Accept-Language": "fa,en;q=0.8", "Referer": "https://www.tgju.org/"},
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept-Encoding": "gzip",
+            "Accept-Language": "fa,en;q=0.8",
+            "Referer": "https://www.tgju.org/",
+        },
     )
-    with urlopen(request, timeout=REQUEST_TIMEOUT) as response:
-        return response.read().decode("utf-8", errors="replace")
+    for attempt in range(1, attempts + 1):
+        try:
+            with urlopen(request, timeout=REQUEST_TIMEOUT) as response:
+                body = response.read()
+                if response.headers.get("Content-Encoding", "").lower() == "gzip":
+                    try:
+                        body = gzip.decompress(body)
+                    except EOFError as error:
+                        raise OSError(f"truncated response: {error}") from None
+                return body.decode("utf-8", errors="replace")
+        except HTTPError:
+            raise  # the server answered; asking again won't change its mind
+        except OSError:
+            if attempt == attempts:
+                raise
+            time.sleep(wait)
 
 
 def parse_page_rates(html):
@@ -117,9 +143,10 @@ def load_markets(markets):
     return {market: rates for market, rates in loaded.items() if market not in errors}, errors
 
 
-def fetch_live_prices():
+def fetch_live_prices(attempts=ATTEMPTS):
+    """The feed's ``current`` section. Live polling passes ``attempts=1``: it has its own backoff."""
     # The feed sits behind a 5-minute CDN cache; a unique query string gets fresh data.
-    feed = json.loads(fetch(f"{FEED_URL}?rev={time.time_ns()}"))
+    feed = json.loads(fetch(f"{FEED_URL}?rev={time.time_ns()}", attempts=attempts))
     return feed["current"]
 
 

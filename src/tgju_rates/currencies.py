@@ -117,10 +117,17 @@ def parse_change(text):
         return None
 
 
-def change_in_toman(text):
-    """Rewrite a change cell's amount in toman; anything unparseable is left as it is."""
+def format_change(text, toman=False):
+    """Show a change cell like "(-0.8%) -23,500" as "-23,500 (-0.8%)", signed, in rial or toman.
+
+    Anything unparseable is left as it is.
+    """
     parsed = parse_change(text)
     if parsed is None:
         return text
     percent, amount = parsed
-    return f"({percent:g}%) {rial_to_toman(amount):,}"
+    if toman:
+        amount = rial_to_toman(amount)
+    if not amount and not percent:
+        return "0 (0%)"
+    return f"{amount:+,} ({percent:+g}%)"

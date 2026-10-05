@@ -9,18 +9,33 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 
+from tgju_rates import __version__
 from tgju_rates.alerts import check_alerts, notify
 from tgju_rates.animation import ANIMATION_SECONDS, DEFAULT_ANIMATION, FRAME_SECONDS
-from tgju_rates.ansi import ALERT_STYLE, BOLD, DIM, DOWN, END_CELL, RESET, UP
+from tgju_rates.ansi import (
+    ALERT_STYLE,
+    BAR_BACKGROUND,
+    BAR_TEXT,
+    BOLD,
+    DIM,
+    DOWN,
+    END_CELL,
+    HEADER_STYLE,
+    KEY_CAP,
+    RESET,
+    UP,
+    WARN,
+    use_color,
+)
 from tgju_rates.chart import CHART_HEIGHT, daily_summary, render_chart, resample
-from tgju_rates.controls import DETAIL_KEY_HELP, KEY_HELP, LiveControls
+from tgju_rates.controls import HELP_LINES, LiveControls
 from tgju_rates.convert import quick_conversion
 from tgju_rates.currencies import (
     ENGLISH_NAMES,
     UNIT_NAMES,
-    change_in_toman,
     display_code,
     english_name,
+    format_change,
     parse_rial,
     rial_to_toman,
     to_toman,
@@ -36,6 +51,7 @@ from tgju_rates.source import SITE_NAME, apply_live_prices, fetch_live_prices
 from tgju_rates.table import change_style, render_holdings, render_table, sparkline
 from tgju_rates.tracking import HIGHLIGHT_SECONDS, TREND_POINTS, PriceTracker
 
+APP_NAME = "tgju-rates"
 # How many fired alerts stay listed above the live table.
 RECENT_ALERTS_SHOWN = 5
 # How many days the detail view lists under its chart.
@@ -52,6 +68,8 @@ class Options:
     animation: str = DEFAULT_ANIMATION
     dashboard: bool = False
     jalali: bool = False
+    # --color: auto, always or never (see ansi.use_color).
+    color: str = "auto"
 
 
 def terminal_width():
@@ -67,8 +85,9 @@ def run_once(rates, shown, alerts, options, history=None, holdings=()):
     if options.json:
         print(rates_json(shown, now=now, toman=options.toman, alerts=fired, valuation=valuation))
         return
-    color = sys.stdout.isatty()
-    print(f"Source: {SITE_NAME}   ({len(shown)} rates)\n")
+    color = use_color(options.color)
+    stamp = format_stamp(now, jalali=options.jalali, seconds=True)
+    print(f"Source: {SITE_NAME}   {len(shown)} rates   {stamp}\n")
     if valuation:
         print(render_holdings(valuation, color=color, toman=options.toman) + "\n")
     if options.dashboard:
@@ -90,14 +109,14 @@ def run_live(rates, shown, alerts, interval, options, history=None, holdings=(),
         session = LiveSession(rates, shown, alerts, interval, options, color=False, **settings)
         session.run(lambda frame: print(frame, flush=True))
     elif not sys.stdout.isatty():
-        session = LiveSession(rates, shown, alerts, interval, options, color=False, **settings)
+        session = LiveSession(rates, shown, alerts, interval, options, color=use_color(options.color), **settings)
         session.run(lambda frame: print_frame(frame.split("\n")))
     else:
-        session = LiveSession(rates, shown, alerts, interval, options, color=True, **settings)
+        session = LiveSession(rates, shown, alerts, interval, options, color=use_color(options.color), **settings)
         with LiveScreen() as screen:
 
             def draw(frame):
-                screen.draw(frame.split("\n"))
+                screen.draw(frame.split("\n"), footer=session.key_bar(terminal_width()))
 
             if sys.stdin.isatty():
                 with KeyReader() as keys:
@@ -153,7 +172,8 @@ class LiveSession:
             self.tracker.load_trends({rate["key"]: history.recent_prices(rate["key"], TREND_POINTS) for rate in rates})
             if holdings:
                 self.total_trend.seed(history, holdings, time.time())
-        self.tracker.update(rates, time.time())
+        # The tracker first sees prices on the first poll, not here: the scraped page can be minutes behind
+        # the feed, and that catch-up isn't a move worth flagging.
         self.active_alerts = set()
         self.fired_alerts = []
         self.recent_alerts = []
@@ -204,7 +224,7 @@ class LiveSession:
     def poll(self):
         now = self.updated_at = time.time()
         try:
-            apply_live_prices(self.rates, fetch_live_prices())
+            apply_live_prices(self.rates, fetch_live_prices(attempts=1))
             self.status = "connected"
             self.failures = 0
         except (OSError, ValueError, KeyError) as error:
@@ -221,7 +241,10 @@ class LiveSession:
         total = self.valuation.complete_worth if self.valuation else None
         stamp = datetime.fromtimestamp(now).strftime("%H:%M:%S")
         self.fired_alerts = check_alerts(self.alerts, self.rates, self.active_alerts, self.controls.toman, total=total)
-        for message in self.fired_alerts:
+        # Muted alerts still update ``active_alerts``, so unmuting doesn't replay every alert that held meanwhile.
+        if self.controls.muted:
+            self.recent_alerts.clear()
+        for message in [] if self.controls.muted else self.fired_alerts:
             notify(message)
             self.recent_alerts.append(f"{stamp}  {message}")
         del self.recent_alerts[:-RECENT_ALERTS_SHOWN]
@@ -240,8 +263,8 @@ class LiveSession:
         return next((rate for rate in self.rates if rate["key"] == self.controls.selected), None)
 
     def is_animating(self, now):
-        # The detail view has no animated cells, and redrawing it would re-read the history file.
-        if not self.color or self.controls.animation == "off" or self.detail_rate():
+        # The detail view and help have no animated cells, and redrawing details would re-read the history file.
+        if not self.color or self.controls.animation == "off" or self.controls.help or self.detail_rate():
             return False
         return any(self.tracker.recent_change(rate["key"], now, ANIMATION_SECONDS) for rate in self.shown)
 
@@ -253,14 +276,27 @@ class LiveSession:
             )
         dim_start, dim_end = (DIM, RESET) if self.color else ("", "")
         alert_start, alert_end = (ALERT_STYLE, RESET) if self.color else ("", "")
-        if self.options.jalali:
-            stamp = format_stamp(self.updated_at, jalali=True, seconds=True)
-        else:
-            stamp = datetime.fromtimestamp(self.updated_at).strftime("%H:%M:%S")
-        watching = f"{dim_start}Watching {len(self.alerts)} alert(s).{dim_end}\n" if self.alerts else ""
+        warn_start = WARN if self.color else ""
+        status = f"{warn_start}⚠ {self.status}{dim_end}\n" if self.status != "connected" else ""
         notice = f"{alert_start}NOTE{alert_end} {self.notice}\n" if self.notice else ""
-        alert_lines = "".join(f"{alert_start}ALERT{alert_end} {line}\n" for line in self.recent_alerts)
+        listed = [] if self.controls.muted else self.recent_alerts
+        alert_lines = "".join(f"{alert_start}ALERT{alert_end} {line}\n" for line in listed)
         shown = self.controls.apply(self.shown)
+        controls = self.controls
+        view = controls.describe()
+        view_line = f"{view}\n" if view else ""
+        convert_line = self.convert_line(dim_start, dim_end)
+        detail = self.detail_rate()
+        if controls.help:
+            body = self.help_view()
+        elif detail:
+            body = self.detail_view(detail, now)
+        else:
+            body = self.rates_view(shown, now)
+        return f"{self.title_bar(terminal_width())}\n{status}{notice}{view_line}{convert_line}{alert_lines}\n{body}"
+
+    def rates_view(self, shown, now):
+        """The savings panel (if any) above the table or the dashboard."""
         controls = self.controls
         view_settings = dict(
             color=self.color,
@@ -277,26 +313,82 @@ class LiveSession:
         savings = ""
         if self.valuation:
             trend = self.total_trend.values
-            savings = render_holdings(self.valuation, color=self.color, toman=self.controls.toman, trend=trend)
+            savings = render_holdings(self.valuation, color=self.color, toman=controls.toman, trend=trend)
             savings += "\n\n"
-        state = "PAUSED" if self.controls.paused else f"every {self.interval:g}s"
-        view = self.controls.describe()
-        view_line = f"{view}\n" if view else ""
-        convert_line = self.convert_line(dim_start, dim_end)
-        detail = self.detail_rate()
-        help_text = DETAIL_KEY_HELP if detail else KEY_HELP
-        key_help = f"{dim_start}Keys: {help_text}{dim_end}\n" if self.interactive else ""
-        quit_hint = "" if self.interactive else "  Ctrl+C to quit."
-        empty = "\nNo currency matches the filter." if self.controls.filter and not shown else ""
-        body = self.detail_view(detail, now) if detail else f"{savings}{table}{empty}"
-        return (
-            f"tgju.org live rates   updated {stamp}   {state}   {self.status}\n"
-            f"{dim_start}▲/▼ marks prices that moved in the last {HIGHLIGHT_SECONDS}s.  "
-            f"TREND shows the last {TREND_POINTS} price changes.{quit_hint}{dim_end}\n"
-            f"{key_help}"
-            f"{notice}{view_line}{convert_line}{watching}{alert_lines}\n"
-            f"{body}"
-        )
+        empty = "\nNo currency matches the filter." if controls.filter and not shown else ""
+        return f"{savings}{table}{empty}"
+
+    def connection_state(self):
+        """A short state for the title bar and its colour: live, paused, or offline after a failed poll."""
+        if self.controls.paused:
+            return "❚❚ PAUSED", WARN
+        if self.failures:
+            return "● OFFLINE", DOWN
+        return "● LIVE", UP
+
+    def title_bar(self, width):
+        """The top line: the program, the connection state, when prices last came in, and what's shown."""
+        if self.options.jalali:
+            stamp = format_stamp(self.updated_at, jalali=True, seconds=True)
+        else:
+            stamp = datetime.fromtimestamp(self.updated_at).strftime("%H:%M:%S")
+        state, tint = self.connection_state()
+        details = [f"updated {stamp}", f"every {self.interval:g}s", UNIT_NAMES[self.controls.toman]]
+        details.append(f"{len(self.shown)} rates")
+        if self.alerts:
+            details.append("alerts muted" if self.controls.muted else f"{len(self.alerts)} alert(s)")
+        name = f"{APP_NAME} {__version__}"
+        separator = "   " if not self.color else "  ·  "
+
+        def segments():
+            return [(f" {name}", BOLD), ("   ", ""), (state, BOLD + tint), ("   ", ""), (separator.join(details), "")]
+
+        # Drop the least important details (from the end) until the bar fits.
+        while details and sum(len(text) for text, _ in segments()) > width:
+            details.pop()
+        if not self.color:
+            return "".join(text for text, _ in segments()).strip()
+        plain = "".join(text for text, _ in segments())
+        styled = "".join(f"{style}{text}{BAR_TEXT}" if style else text for text, style in segments())
+        return f"{BAR_BACKGROUND}{BAR_TEXT}{styled}{' ' * max(0, width - len(plain))}{RESET}"
+
+    def key_bar(self, width):
+        """The bottom line: what each key does right now. Hints that don't fit are dropped, but not ?, q or m."""
+        hints = self.controls.hints() if self.interactive else (("Ctrl+C", "quit"),)
+        if not self.alerts:
+            hints = [(key, action) for key, action in hints if key != "m"]
+        required = {"?", "q", "Esc", "Enter", "m"}  # "m" is only there with alerts, and then it matters
+
+        def size(key, action):
+            # " key " + " action  ", or "key action  " without colour
+            return len(key) + len(action) + (5 if self.color else 3)
+
+        used = sum(size(key, action) for key, action in hints if key in required)
+        kept = []
+        for key, action in hints:
+            if key in required or used + size(key, action) <= width + 2:  # the last hint's gap is cut
+                kept.append((key, action))
+                used += 0 if key in required else size(key, action)
+        if not self.color:
+            return "  ".join(f"{key} {action}" for key, action in kept)
+        return "".join(f"{KEY_CAP} {key} {RESET} {action}  " for key, action in kept).rstrip()
+
+    def help_view(self):
+        """The ? overlay: every key, then what the symbols on screen mean."""
+        heading, end = (HEADER_STYLE, RESET) if self.color else ("", "")
+        width = max(len(key) for key, _ in (*HELP_LINES, ("● LIVE", "")))
+        lines = [f"{heading}KEYS{end}"]
+        lines += [f"  {key:<{width}}   {text}" for key, text in HELP_LINES]
+        lines += [
+            "",
+            f"{heading}ON SCREEN{end}",
+            f"  {'▲ ▼':<{width}}   a price that moved in the last {HIGHLIGHT_SECONDS}s",
+            f"  {'TREND':<{width}}   the last {TREND_POINTS} price changes, oldest first",
+            f"  {'● LIVE':<{width}}   prices are coming in (OFFLINE: the last poll failed, retrying)",
+            "",
+            f"tgju-rates {__version__}. Data from {SITE_NAME}; this program is not affiliated with it.",
+        ]
+        return "\n".join(lines)
 
     def detail_view(self, rate, now):
         """One rate in full: price, change, low/high, its alerts, and a chart of its saved prices."""
@@ -309,7 +401,7 @@ class LiveSession:
         title = f"{bold}{display_code(key)}  {english_name(key)}{end}"
         if self.options.persian and rate["name"]:
             title += f"   {rate['name']}"
-        change = change_in_toman(rate["change"]) if toman else rate["change"]
+        change = format_change(rate["change"], toman)
         if color:
             change = f"{change_style(rate['change'])}{change}{END_CELL}"
         lines = [
@@ -365,7 +457,7 @@ def run_history(history, key, days, options, now=None, view="list"):
     now = time.time() if now is None else now
     start = now - days * 86400
     changes = history.changes_since(key, start)
-    color, jalali = sys.stdout.isatty(), options.jalali
+    color, jalali = use_color(options.color), options.jalali
     if options.json:
         print(history_json(key, changes, toman=options.toman))
     elif view == "csv":

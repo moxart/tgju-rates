@@ -69,7 +69,7 @@ class RenderTableTest(unittest.TestCase):
         self.assertLess(header.index("PRICE (TOMAN)"), header.index("RIAL"))
         self.assertEqual(
             line.split(),
-            ["EUR", "Euro", "292,350", "2,923,500", "(-0.5%)", "-1,450", "288,530", "292,640"],
+            ["EUR", "Euro", "292,350", "2,923,500", "-1,450", "(-0.5%)", "288,530", "292,640"],
         )
 
     def test_persian_column_is_last(self):

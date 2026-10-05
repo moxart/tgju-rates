@@ -1,25 +1,37 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "tgju-rates"
 dynamic = ["version"]
-description = "Live Iranian rial exchange rates from tgju.org in your terminal"
+description = "Live Iranian rial exchange rates, gold and crypto prices from tgju.org in your terminal"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { file = "LICENSE" }
-keywords = ["tgju", "currency", "exchange-rate", "rial", "terminal", "cli"]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "moxart" }]
+keywords = ["tgju", "currency", "exchange-rate", "rial", "toman", "gold", "crypto", "terminal", "cli"]
 classifiers = [
+    "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Office/Business :: Financial",
 ]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/moxart/tgju-rates"
+Issues = "https://github.com/moxart/tgju-rates/issues"
+Changelog = "https://github.com/moxart/tgju-rates/blob/main/CHANGELOG.md"
 
 [project.scripts]
 tgju-rates = "tgju_rates.cli:main"

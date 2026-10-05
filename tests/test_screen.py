@@ -20,10 +20,10 @@ class LiveScreenTest(unittest.TestCase):
         self.terminal = FakeTerminal()
         self.screen = LiveScreen(stream=self.out, get_size=self.terminal)
 
-    def drawn(self, lines):
+    def drawn(self, lines, footer=None):
         self.out.seek(0)
         self.out.truncate()
-        self.screen.draw(lines)
+        self.screen.draw(lines, footer)
         return self.out.getvalue()
 
     def test_first_frame_clears_and_draws_every_line(self):
@@ -61,6 +61,19 @@ class LiveScreenTest(unittest.TestCase):
         self.assertIn(move_to(2) + "2", output)
         self.assertNotIn(move_to(4), output)
         self.assertIn("3 more row(s)", output)
+
+    def test_footer_is_pinned_to_the_last_row(self):
+        self.terminal.size = os.terminal_size((80, 5))
+        output = self.drawn(["a"], footer="keys")
+        self.assertIn(move_to(5) + "keys", output)
+        self.assertEqual(self.drawn(["a"], footer="keys"), "")
+
+    def test_footer_takes_a_row_from_a_tall_frame(self):
+        self.terminal.size = os.terminal_size((80, 4))
+        output = self.drawn(["1", "2", "3", "4", "5"], footer="keys")
+        self.assertIn(move_to(2) + "2", output)
+        self.assertIn("3 more row(s)", output)
+        self.assertIn(move_to(4) + "keys", output)
 
     def test_context_manager_restores_terminal(self):
         with self.screen:

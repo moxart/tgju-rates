@@ -1,0 +1,40 @@
+name: Bug report
+description: Something doesn't work, or shows the wrong thing
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what you got instead.
+      placeholder: |
+        tgju-rates --watch usd,emami
+        Expected ..., but ...
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `tgju-rates --doctor`
+      description: It checks whether tgju.org's page and feed still work with the program.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Traceback
+      description: For a crash, run the same command with `--debug` and paste the traceback.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `tgju-rates --version`
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: OS, terminal and Python version
+      placeholder: Ubuntu 24.04, GNOME Terminal, Python 3.12

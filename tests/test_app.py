@@ -25,17 +25,52 @@ class FakeKeys:
 
 @mock.patch("tgju_rates.app.fetch_live_prices", return_value={"current": {}})
 class LiveSessionKeysTest(unittest.TestCase):
+    def test_first_poll_does_not_flag_a_move(self, fetch):
+        fetch.return_value = {"price_eur": {"p": "3,000,000", "l": "1", "h": "2", "t": "", "d": "0", "dp": "0"}}
+        session = self.session()
+        session.poll()
+        self.assertIsNone(session.tracker.recent_move("price_eur", session.updated_at))
+
     def session(self):
         rates = [rate("price_eur", "2,900,000"), rate("price_gbp", "3,400,000")]
         return LiveSession(rates, rates, [], 10, Options(), color=False)
 
     def test_key_redraws_at_once_and_q_quits(self, _fetch):
         frames = []
-        self.session().run(frames.append, FakeKeys("t"))
+        session = self.session()
+        session.run(frames.append, FakeKeys("t"))
         self.assertEqual(len(frames), 2)  # the first poll, then the redraw after "t"
         self.assertIn("PRICE (RIAL)", frames[0])
         self.assertIn("PRICE (TOMAN)", frames[1])
-        self.assertIn("Keys:", frames[0])
+        self.assertIn("● LIVE", frames[0])
+        self.assertIn("t toman/rial", session.key_bar(200))
+
+    def test_key_bar_drops_hints_that_do_not_fit_but_keeps_help_and_quit(self, _fetch):
+        session = self.session()
+        session.interactive = True
+        bar = session.key_bar(40)
+        self.assertIn("? help", bar)
+        self.assertIn("q quit", bar)
+        self.assertNotIn("p pause", bar)
+        self.assertLessEqual(len(bar), 40)
+
+    def test_key_bar_without_keys_only_says_how_to_quit(self, _fetch):
+        self.assertEqual(self.session().key_bar(80), "Ctrl+C quit")
+
+    def test_question_mark_opens_help_and_esc_closes_it(self, _fetch):
+        frames = []
+        session = self.session()
+        session.run(frames.append, FakeKeys("?", "\x1b"))
+        self.assertIn("KEYS", frames[1])
+        self.assertNotIn("PRICE (RIAL)", frames[1])
+        self.assertIn("PRICE (RIAL)", frames[2])
+
+    def test_failed_poll_shows_offline_and_the_error(self, fetch):
+        fetch.side_effect = OSError("down")
+        frames = []
+        self.session().run(frames.append, FakeKeys())
+        self.assertIn("● OFFLINE", frames[0])
+        self.assertIn("⚠ feed error, retrying in 20s: down", frames[0])
 
     def test_filter_hides_rows(self, _fetch):
         frames = []
@@ -70,6 +105,7 @@ class LiveSessionAnimationTest(unittest.TestCase):
         fetch.return_value = {"price_eur": {"p": "3,000,000", "l": "1", "h": "2", "t": "", "d": "100,000", "dp": "3.4"}}
         rates = [rate("price_eur", "2,900,000")]
         session = LiveSession(rates, rates, [], 10, Options(animation=animation), color=True)
+        session.tracker.update(rates, -1)  # an earlier poll at the old price
         keys = FakeKeys(*[[]] * 100)
         frames = []
         # Each call moves the clock on 20ms, enough for the animation to finish well before the keys run out.
@@ -107,6 +143,45 @@ class LiveSessionHoldingsTest(unittest.TestCase):
         self.assertIn("580,000", frames[1])
         notify.assert_called_once()
         self.assertIn("TOTAL", notify.call_args[0][0])
+
+
+@mock.patch("tgju_rates.app.notify")
+@mock.patch("tgju_rates.app.fetch_live_prices", return_value={"current": {}})
+class LiveSessionMuteTest(unittest.TestCase):
+    def session(self):
+        rates = [rate("price_eur", "2,900,000")]
+        session = LiveSession(rates, rates, [parse_alert("eur>1")], 10, Options(), color=False)
+        session.interactive = True
+        return session
+
+    def test_m_clears_alert_lines_and_stops_notifications_until_pressed_again(self, _fetch, notify):
+        session = self.session()
+        session.poll()
+        self.assertEqual(notify.call_count, 1)
+        self.assertIn("ALERT", session.frame(0))
+
+        session.controls.handle("m")
+        self.assertIn("m unmute alerts", session.key_bar(200))
+        frames = []
+        session.run(frames.append, FakeKeys([]))
+        self.assertNotIn("ALERT", frames[-1])
+        self.assertIn("alerts muted", session.title_bar(200))
+
+        session.active_alerts.clear()  # the price crosses the limit again
+        session.poll()
+        self.assertEqual(notify.call_count, 1)
+        self.assertNotIn("ALERT", session.frame(0))
+
+        session.controls.handle("m")
+        session.active_alerts.clear()
+        session.poll()
+        self.assertEqual(notify.call_count, 2)
+
+    def test_mute_hint_only_shows_with_alerts(self, _fetch, _notify):
+        session = self.session()
+        self.assertIn("m mute alerts", session.key_bar(200))
+        session.alerts = []
+        self.assertNotIn("mute", session.key_bar(200))
 
 
 class LiveSessionBackoffTest(unittest.TestCase):
@@ -185,7 +260,6 @@ class DetailViewTest(unittest.TestCase):
         self.assertIn("GBP  British Pound", frames[2])
         self.assertIn("alerts: GBP > 3,000,000", frames[2])
         self.assertIn("GBP (British Pound), last 1 day(s)", frames[2])
-        self.assertIn("Esc back", frames[2])
         self.assertIn("last 7 day(s)", frames[3])
         self.assertIn("PRICE (RIAL)", frames[4])  # Esc went back to the table
 

@@ -36,18 +36,21 @@ class LiveScreen:
         self._stream.write(LEAVE_LIVE_SCREEN)
         self._stream.flush()
 
-    def draw(self, lines):
+    def draw(self, lines, footer=None):
+        """Show ``lines`` from the top of the screen, and ``footer`` (if any) pinned to the bottom row."""
         size = self._get_size()
         out = []
         # After a resize the old screen contents can't be trusted, so start over.
         if size != self._size:
             self._size, self._drawn = size, []
             out.append(CLEAR_SCREEN)
-        if len(lines) > size.lines:
-            hidden = len(lines) - size.lines + 1
-            lines = lines[: size.lines - 1] + [
-                f"{DIM}... {hidden} more row(s); enlarge the window or use --watch{RESET}"
-            ]
+        room = size.lines - 1 if footer is not None and size.lines > 1 else size.lines
+        if len(lines) > room:
+            hidden = len(lines) - room + 1
+            lines = lines[: room - 1] + [f"{DIM}... {hidden} more row(s); enlarge the window or use --watch{RESET}"]
+        if room < size.lines:
+            # Blank rows down to the footer, so it sits on the last row and is diffed like any other line.
+            lines = lines + [""] * (room - len(lines)) + [footer]
         for row, line in enumerate(lines):
             if row >= len(self._drawn) or self._drawn[row] != line:
                 out.append(f"{move_to(row + 1)}{line}{RESET}{CLEAR_LINE_END}")

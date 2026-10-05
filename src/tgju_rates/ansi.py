@@ -1,7 +1,26 @@
 """ANSI escape sequences and the colour palette shared by the table and the live screen."""
 
+import os
+import sys
+
+# --color: "auto" colours a terminal only, and follows NO_COLOR / FORCE_COLOR (https://no-color.org).
+COLOR_MODES = ("auto", "always", "never")
+
+
+def use_color(mode="auto", stream=None):
+    """Whether output to ``stream`` (stdout by default) should be coloured under the --color ``mode``."""
+    if mode == "always":
+        return True
+    if mode == "never" or os.environ.get("NO_COLOR"):
+        return False
+    if os.environ.get("FORCE_COLOR"):
+        return True
+    stream = stream or sys.stdout
+    return stream.isatty() and os.environ.get("TERM") != "dumb"
+
+
 DIM, BOLD, RESET = "\033[2m", "\033[1m", "\033[0m"
-ALERT_STYLE = f"{BOLD}\033[38;5;214m"  # orange
+ALERT_STYLE = f"{BOLD}\033[38;5;214m"  # orange, like WARN
 CLEAR_SCREEN = "\033[H\033[2J"
 CLEAR_LINE_END, CLEAR_BELOW = "\033[K", "\033[J"
 # Live mode draws on the alternate screen with the cursor hidden and line wrap off, so a
@@ -19,6 +38,12 @@ SELECTED = "\033[48;5;24m"
 # 256-colour palette: identifiers stand out, the price is brightest, secondary figures recede.
 UP, DOWN, FLAT = "\033[38;5;114m", "\033[38;5;203m", "\033[38;5;244m"
 HEADER_STYLE = f"{BOLD}\033[38;5;250m"
+WARN = "\033[38;5;214m"  # orange
+
+# The live screen's title bar (light text on dark grey) and the key caps in its key bar (black on cyan).
+BAR_BACKGROUND = "\033[48;5;237m"
+BAR_TEXT = "\033[22;38;5;252m"
+KEY_CAP = "\033[1;38;5;16;48;5;81m"
 
 
 def move_to(row):

@@ -2,7 +2,7 @@
 
 from tgju_rates.animation import ANIMATION_SECONDS, cell_style, rolled, rolls, uses_background
 from tgju_rates.ansi import BOLD, DEFAULT_BACKGROUND, DOWN, END_CELL, FLAT, HEADER_STYLE, RESET, SELECTED, STRIPE, UP
-from tgju_rates.currencies import change_in_toman, display_code, english_name, rial_to_toman, to_toman
+from tgju_rates.currencies import display_code, english_name, format_change, parse_change, rial_to_toman, to_toman
 from tgju_rates.tracking import TREND_POINTS
 
 BASE_HEADER = ("CODE", "NAME", "PRICE (RIAL)", "TOMAN", "CHANGE", "LOW", "HIGH")
@@ -47,25 +47,23 @@ def trend_style(prices):
 
 
 def change_style(change):
-    """Colour a change like "(-0.5%) -100" by its direction."""
-    percent = change.partition("%")[0].lstrip("(")
-    try:
-        value = float(percent)
-    except ValueError:
-        return FLAT
+    """Colour a change cell like "(-0.5%) -100" (as the site gives it) by its direction."""
+    parsed = parse_change(change)
+    value = parsed[0] if parsed else 0
     return UP if value > 0 else DOWN if value < 0 else FLAT
 
 
 def base_row(rate, toman):
     code, name = display_code(rate["key"]), english_name(rate["key"])
+    change = format_change(rate["change"], toman)
     if not toman:
-        return [code, name, rate["price"], to_toman(rate["price"]), rate["change"], rate["low"], rate["high"]]
+        return [code, name, rate["price"], to_toman(rate["price"]), change, rate["low"], rate["high"]]
     return [
         code,
         name,
         to_toman(rate["price"]),
         rate["price"],
-        change_in_toman(rate["change"]),
+        change,
         to_toman(rate["low"]),
         to_toman(rate["high"]),
     ]
@@ -132,7 +130,7 @@ def render_table(rates, *, color, persian=False, toman=False, tracker=None, now=
             styles.append(trend_style(tracker.trends.get(rate["key"], ())))
         if persian:
             styles.append(None)
-        styles[CHANGE_COLUMN] = change_style(row[CHANGE_COLUMN])
+        styles[CHANGE_COLUMN] = change_style(rate["change"])
         move = tracker.recent_move(rate["key"], now) if tracker is not None else None
         if move:
             arrow, tint = ("▲", UP) if move == "up" else ("▼", DOWN)

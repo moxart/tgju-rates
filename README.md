@@ -8,6 +8,7 @@ Live Iranian rial exchange rates from [tgju.org](https://www.tgju.org/currency) 
 - A short trading-screen animation on every price change: flash, glow, rolling digits or both. Or none.
 - A watchlist, and price alerts with desktop notifications.
 - Toman mode (`--toman`) and JSON output (`--json`) for scripts.
+- A settings file for the options you always use.
 - Price history saved to a local SQLite file, so sparklines survive restarts and past prices can be listed.
 - No dependencies. Only the Python standard library is used.
 
@@ -54,6 +55,8 @@ tgju-rates --convert "50,000,000 toman to btc"
 tgju-rates --jewelry "12.5g wage 18%"         # what an 18k gold piece should cost
 tgju-rates --doctor              # check that tgju.org still works with this program
 ```
+
+`tgju-rates --help` lists every option, grouped, with examples.
 
 Currency codes are the site's codes in lower case (`eur`, `gbp`, `aed`, ...). `usd` is accepted for the
 US dollar. An unknown code prints the list of valid ones.
@@ -110,6 +113,10 @@ after the condition has stopped holding in between. Fired alerts are listed abov
 desktop notification when `notify-send` is available. Alerts work on any currency, including ones not
 in `--watch`.
 
+To turn alerts off, press `m` while it runs: no notifications, and the ALERT lines go away, until you
+press `m` again. Alerts that come true while muted aren't replayed when you unmute. `--no-alerts`
+starts without any alerts, including the ones in the settings file.
+
 ### Jewelry calculator
 
 `--jewelry` works out what a piece of 18k gold jewelry should cost at the live price of a gram of
@@ -156,6 +163,43 @@ rial unless you write `toman` after them; `--hold` prices follow `--toman`, like
 BOUGHT on the TOTAL row covers only the holdings with a price. `--alert "total>LIMIT"` fires when your
 total crosses the limit, and `--json` adds a `holdings` object.
 
+### Settings file
+
+Options you'd otherwise type every time can go in `~/.config/tgju-rates/config.ini` (or
+`$XDG_CONFIG_HOME/tgju-rates/`, or any file with `--config PATH`). Name each option like the long
+option without its dashes:
+
+```ini
+[defaults]
+toman = yes
+watch = usd,eur,gbp,emami,gold18,btc
+interval = 15
+animation = roll
+alert = usd>2,700,000
+        total>5,000,000,000
+```
+
+The file can set `interval`, `toman`, `jalali`, `persian`, `dashboard`, `animation`, `market`, `watch`,
+`alert`, `color`, `days`, `db`, `holdings` and `no-record`. Flags take `yes` or `no`. A repeatable option
+like `alert` takes one value per line.
+
+The command line wins over the file: `--no-toman` turns off a `toman = yes`, and `-i 5` replaces the
+interval. `--alert` values on the command line are added to the file's. A value the program can't
+read stops it with the file, option and reason. `--doctor` also checks the file.
+
+### Colours
+
+Colours are on in a terminal and off when the output is piped. `--color always` or `--color never`
+overrides that, and so do the [`NO_COLOR`](https://no-color.org) and `FORCE_COLOR` environment
+variables.
+
+### The live screen
+
+The top line shows the connection state: `● LIVE` while prices come in, `● OFFLINE` after a failed
+poll (with the error on the next line, while it retries), and `❚❚ PAUSED`. Then the time of the last
+update, the interval, the unit, and how many rates and alerts there are. The bottom line lists the keys
+that work in the current view; press `?` for all of them.
+
 ### Keys
 
 In live mode in a terminal, single keys change the view without restarting:
@@ -171,7 +215,9 @@ In live mode in a terminal, single keys change the view without restarting:
 | `c` | convert, e.g. `250 usd eur`; the result updates as you type and with each new price |
 | `a` | next price animation: flash, glow, roll, board, off |
 | `Esc` | leave the details; otherwise clear the filter, the converter and the selection |
+| `m` | mute alerts: no notifications and the ALERT lines are cleared; `m` again unmutes |
 | `p` | pause and resume updates |
+| `?` | show or hide the help screen |
 | `q` | quit (Ctrl+C works too) |
 
 `t` only changes the display. `--alert` limits stay in the unit they were given in.
@@ -259,6 +305,13 @@ echo 'eval "$(tgju-rates --completion zsh)"' >> ~/.zshrc   # after compinit
 every coin, gold and crypto entry is in the feed, and the history and holdings files can be read. It
 exits with status 1 if anything failed, which makes its output a good start for a bug report.
 
+If the program stops with "unexpected error", run the same command with `--debug` to see the full
+traceback, and please [open an issue](https://github.com/moxart/tgju-rates/issues) with it and the
+`--doctor` output.
+
+Exit statuses: `0` success, `1` an error (no connection and nothing saved, unreadable file, ...), `2` a
+mistake in the options or the settings file, `130` stopped with Ctrl+C.
+
 ## How it works
 
 1. At startup, the [currency page](https://www.tgju.org/currency) is scraped once to find which
@@ -278,6 +331,7 @@ broke.
 ```
 src/tgju_rates/
 ├── cli.py         argument parsing and the entry point
+├── config.py      the settings file
 ├── app.py         --once mode and the live polling loop
 ├── source.py      scraping the page and reading the JSON feed
 ├── markets.py     the coin, gold and crypto entries taken from the feed
@@ -292,6 +346,7 @@ src/tgju_rates/
 ├── history.py     the SQLite price history
 ├── export.py      JSON output
 ├── alerts.py      alert rules and desktop notifications
+├── controls.py    live-mode keys, key bar and help screen
 ├── table.py       rendering the table, sparklines and colours
 ├── dashboard.py   --dashboard: one panel per market, laid out in a grid
 ├── screen.py      flicker-free in-place terminal updates
@@ -307,6 +362,9 @@ pip install -e . ruff
 python -m unittest discover -s tests   # tests
 ruff check . && ruff format --check .  # lint and formatting
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the conventions and how releases are made, and
+[CHANGELOG.md](CHANGELOG.md) for what changed.
 
 A currency the site adds later shows `-` as its name until it gets an entry in `ENGLISH_NAMES` in
 `currencies.py`.
