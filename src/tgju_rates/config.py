@@ -35,6 +35,8 @@ CONFIG_OPTIONS = (
     "db",
     "holdings",
     "no-record",
+    "host",
+    "port",
 )
 
 

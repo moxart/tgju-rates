@@ -10,20 +10,24 @@ from tgju_rates import ISSUES_URL, PROJECT_URL, __version__
 from tgju_rates.alerts import TOTAL_KEY, parse_alert
 from tgju_rates.animation import ANIMATIONS, DEFAULT_ANIMATION
 from tgju_rates.ansi import COLOR_MODES, use_color
+from tgju_rates.api import RateStore
 from tgju_rates.app import HISTORY_VIEWS, Options, run_history, run_live, run_once, saved_rates
 from tgju_rates.completion import SHELLS, completion_script
 from tgju_rates.config import config_defaults, default_config_path, read_config
 from tgju_rates.convert import parse_conversion, run_convert
-from tgju_rates.currencies import display_code, row_key
+from tgju_rates.currencies import display_code, parse_codes, row_key
 from tgju_rates.dashboard import DASHBOARD_CODES
 from tgju_rates.doctor import run_doctor
 from tgju_rates.history import History, default_path
 from tgju_rates.holdings import default_holdings_path, load_holdings, merge_holdings, parse_holding
 from tgju_rates.jewelry import parse_piece, run_jewelry
 from tgju_rates.markets import CURRENCY, FEED_MARKETS, MARKETS, market_of, parse_markets
+from tgju_rates.server import LOOPBACK_HOSTS, bind, serve
 from tgju_rates.source import apply_live_prices, fetch_live_prices, load_markets
 
 DEFAULT_INTERVAL = 10
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 8080
 MIN_INTERVAL = 3
 # Exit statuses: argparse uses 2 for usage errors, and sys.exit("message") gives 1.
 EXIT_ERROR = 1
@@ -79,6 +83,7 @@ def market_codes_epilog():
 USAGE = """%(prog)s [options]                           live rates (or one table with --once)
        %(prog)s --history CODE [--days N] [--chart | --csv]
        %(prog)s --convert TEXT | --jewelry TEXT
+       %(prog)s --serve [--host HOST] [--port PORT]
        %(prog)s --doctor | --completion SHELL"""
 
 EXAMPLES = """examples:
@@ -87,7 +92,8 @@ EXAMPLES = """examples:
   tgju-rates --alert "usd>2,700,000" --hold usd=1200@2,450,000
   tgju-rates --history usd --days 30 --chart
   tgju-rates --convert "250 usd eur"
-  tgju-rates --once --json | jq '.rates[0]'"""
+  tgju-rates --once --json | jq '.rates[0]'
+  tgju-rates --serve && curl localhost:8080/v1/rates/usd"""
 
 
 def build_parser():
@@ -207,6 +213,17 @@ def build_parser():
     history.add_argument("--db", metavar="PATH", help=f"history file (default {default_path()})")
     history.add_argument("--no-record", action="store_true", help="don't save prices to the history file")
 
+    api = parser.add_argument_group(
+        "API server", "Serve the rates, history, converter and jewelry calculator as JSON over HTTP."
+    )
+    api.add_argument("--serve", action="store_true", help="run the API server, polling every --interval seconds")
+    api.add_argument(
+        "--host",
+        default=DEFAULT_HOST,
+        help=f"address to listen on (default {DEFAULT_HOST}, this computer only; 0.0.0.0 for your network)",
+    )
+    api.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"port to listen on (default {DEFAULT_PORT})")
+
     tools = parser.add_argument_group("tools", "Each of these does its job and exits.")
     tools.add_argument(
         "--convert",
@@ -228,7 +245,7 @@ def build_parser():
 
 def parse_watch(watch):
     """Turn a --watch value like "usd,eur" into row keys, keeping the user's order."""
-    return list(dict.fromkeys(row_key(code) for code in watch.split(",") if code.strip())) if watch else []
+    return parse_codes(watch or "")
 
 
 def exit_if_unknown(by_key, keys):
@@ -241,10 +258,10 @@ def exit_if_unknown(by_key, keys):
         )
 
 
-def open_history(path, required):
+def open_history(path, required, threads=False):
     """Open the history file; if it can't be opened, live mode carries on without it."""
     try:
-        return History.open(path)
+        return History.open(path, threads=threads)
     except (OSError, sqlite3.Error) as error:
         if required:
             sys.exit(f"Could not open history file {path}: {error}")
@@ -335,9 +352,12 @@ def command(argv=None):
 
     # Exit through KeyboardInterrupt on SIGTERM too, so live mode restores the terminal.
     signal.signal(signal.SIGTERM, signal.default_int_handler)
-    history = None if args.no_record else open_history(db_path, required=False)
+    history = None if args.no_record else open_history(db_path, required=False, threads=args.serve)
     try:
-        run(args, options, history)
+        if args.serve:
+            run_server(args, history)
+        else:
+            run(args, options, history)
     finally:
         if history is not None:
             history.close()
@@ -377,6 +397,24 @@ def load_rates(markets, history, db_path):
         loaded.setdefault(market_of(rate["key"]), []).append(rate)
     problems = "; ".join(errors.values())
     return loaded, f"{problems}. Using the list saved in the history file; {freshness}."
+
+
+def run_server(args, history):
+    try:
+        server = bind(args.host, args.port)
+    except OSError as error:
+        sys.exit(f"Could not listen on {args.host}:{args.port}: {error}")
+    if args.host not in LOOPBACK_HOSTS:
+        print(f"Note: listening on {args.host}, so other computers can reach the API.", file=sys.stderr)
+    loaded, notice = load_rates(list(MARKETS), history, args.db or default_path())
+    if notice:
+        print(f"Note: {notice}", file=sys.stderr)
+    rates = [rate for market in MARKETS for rate in loaded.get(market, [])]
+    store = RateStore(rates, max(args.interval, MIN_INTERVAL), history, notice)
+    try:
+        serve(server, store)
+    except KeyboardInterrupt:
+        print("\nStopped.", file=sys.stderr)
 
 
 def read_holdings(args):

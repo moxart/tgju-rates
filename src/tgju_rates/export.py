@@ -66,7 +66,7 @@ def rates_json(rates, *, now, toman=False, alerts=(), valuation=None):
     """One snapshot as a single-line JSON object, so live mode can emit JSON Lines."""
     snapshot = {
         "source": PAGE_URL,
-        "time": datetime.fromtimestamp(now).astimezone().isoformat(timespec="seconds"),
+        "time": iso_time(now),
         "unit": UNIT_NAMES[toman],
         "rates": [rate_record(rate, toman) for rate in rates],
         "alerts": list(alerts),
@@ -76,18 +76,17 @@ def rates_json(rates, *, now, toman=False, alerts=(), valuation=None):
     return json.dumps(snapshot, ensure_ascii=False)
 
 
+def iso_time(timestamp):
+    return datetime.fromtimestamp(timestamp).astimezone().isoformat(timespec="seconds")
+
+
+def history_record(key, changes, *, toman=False):
+    return {
+        "code": display_code(key),
+        "unit": UNIT_NAMES[toman],
+        "prices": [{"time": iso_time(time), "price": in_unit(price, toman)} for time, price in changes],
+    }
+
+
 def history_json(key, changes, *, toman=False):
-    return json.dumps(
-        {
-            "code": display_code(key),
-            "unit": UNIT_NAMES[toman],
-            "prices": [
-                {
-                    "time": datetime.fromtimestamp(time).astimezone().isoformat(timespec="seconds"),
-                    "price": in_unit(price, toman),
-                }
-                for time, price in changes
-            ],
-        },
-        ensure_ascii=False,
-    )
+    return json.dumps(history_record(key, changes, toman=toman), ensure_ascii=False)

@@ -136,6 +136,30 @@ tgju-rates --jewelry "3.2g wage 15% tax 9%" --json
 Each part is shown in rial and toman. When the feed can't be reached, the last saved gold price is
 used and a note says so.
 
+### API server
+
+`--serve` runs a small JSON API with the same data, for a home dashboard, a bot or a script. It loads
+every market, reads the feed every `--interval` seconds and saves changed prices to the history file.
+
+```sh
+tgju-rates --serve                      # http://127.0.0.1:8080/v1/
+curl localhost:8080/v1/rates/usd
+curl "localhost:8080/v1/rates?market=coin,gold&unit=toman"
+curl "localhost:8080/v1/rates?codes=usd,eur,emami,btc"
+curl "localhost:8080/v1/history/usd?days=7"
+curl "localhost:8080/v1/convert?amount=250&from=usd&to=eur"
+curl "localhost:8080/v1/jewelry?weight=12.5&wage=18"
+curl localhost:8080/v1/health
+```
+
+Prices are whole numbers in rial, or toman with `unit=toman`. Each response about current prices has
+`updated` (when the feed was last read) and `stale` (true when that was more than three intervals
+ago). Errors come back as `{"error": "..."}` with status 400, 404 or 503.
+
+It listens on this computer only. `--host 0.0.0.0` opens it to your network; it has no
+authentication or HTTPS, so don't expose it to the internet as it is. `--port` changes the port.
+The prices belong to tgju.org, so check their terms before you share the API with others.
+
 ### Your savings
 
 List the currencies you hold, and a panel above the table shows what each is worth now, how much it has
