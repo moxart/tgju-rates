@@ -32,6 +32,14 @@ All notable changes to this project are listed here. The format follows
 - Exit statuses: 0 on success, 1 on an error, 2 on a usage error, 130 when interrupted. Piping into a
   program that stops reading (`| head`) exits quietly.
 
+### Fixed
+
+- Piped live output with `--color always` or `FORCE_COLOR` no longer prints about 20 extra frames each
+  time a price changes; animations only play on the live screen.
+- An arrow key read together with a typed key (e.g. while holding it) is no longer split into Esc and
+  text, which cleared the filter or typed `[A` into it.
+- `--convert` and `--jewelry` report a zero price as missing instead of failing with a division by zero.
+
 ## [0.1.0] - 2026-10-04
 
 ### Added

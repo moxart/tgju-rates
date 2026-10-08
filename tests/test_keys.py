@@ -20,6 +20,11 @@ class SplitKeysTest(unittest.TestCase):
     def test_lone_escape(self):
         self.assertEqual(split_keys("\x1b"), ["\x1b"])
 
+    def test_sequence_after_or_before_typed_keys(self):
+        self.assertEqual(split_keys("q\x1b[A"), ["q", "\x1b[A"])
+        self.assertEqual(split_keys("\x1b[Ax"), ["\x1b[A", "x"])
+        self.assertEqual(split_keys("\x1bxy\x1b[B"), ["\x1bxy", "\x1b[B"])
+
 
 @unittest.skipIf(os.name == "nt", "uses a pipe and select()")
 class KeyReaderTest(unittest.TestCase):

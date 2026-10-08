@@ -19,6 +19,8 @@ DOWN_KEYS = ("\x1b[B", "\x1bOB")
 UP_KEY, DOWN_KEY = UP_KEYS[0], DOWN_KEYS[0]
 # A CSI sequence ("\x1b[" then parameters and a final letter or ~) or an SS3 one ("\x1bO" and a letter).
 SEQUENCE_PATTERN = re.compile(r"\x1b(?:\[[0-9;?]*[@-~]|O[A-Za-z])")
+# One key: a known sequence, other Esc text up to the next Esc, or a single character.
+KEY_PATTERN = re.compile(rf"{SEQUENCE_PATTERN.pattern}|\x1b[^\x1b]*|.", re.DOTALL)
 # Windows reports an arrow as a prefix and a code; these are the codes for up and down.
 WINDOWS_ARROWS = {"H": UP_KEY, "P": DOWN_KEY}
 # How often Windows checks for a key while waiting; it has no select() on the console.
@@ -30,15 +32,10 @@ def split_keys(text):
 
     Arrow and function keys arrive as an escape sequence such as "\\x1b[A"; each comes back as one
     item, so it can't be mistaken for Esc followed by typed text, and a held arrow key that sent
-    several at once gives several items. Anything else that starts with Esc stays whole.
-    A lone "\\x1b" is the Esc key.
+    several at once gives several items. A sequence can come before or after typed keys in the same
+    read. Any other text that starts with Esc stays whole up to the next Esc. A lone "\\x1b" is the Esc key.
     """
-    if not text.startswith(ESCAPE) or len(text) == 1:
-        return list(text)
-    sequences = SEQUENCE_PATTERN.findall(text)
-    if "".join(sequences) == text:
-        return sequences
-    return [text]
+    return KEY_PATTERN.findall(text)
 
 
 class KeyReader:

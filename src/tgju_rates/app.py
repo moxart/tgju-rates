@@ -6,7 +6,7 @@ import shutil
 import sqlite3
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from tgju_rates import __version__
@@ -109,7 +109,9 @@ def run_live(rates, shown, alerts, interval, options, history=None, holdings=(),
         session = LiveSession(rates, shown, alerts, interval, options, color=False, **settings)
         session.run(lambda frame: print(frame, flush=True))
     elif not sys.stdout.isatty():
-        session = LiveSession(rates, shown, alerts, interval, options, color=use_color(options.color), **settings)
+        # Each piped frame is printed in full, so an animation would print one frame per FRAME_SECONDS.
+        piped = replace(options, animation="off")
+        session = LiveSession(rates, shown, alerts, interval, piped, color=use_color(options.color), **settings)
         session.run(lambda frame: print_frame(frame.split("\n")))
     else:
         session = LiveSession(rates, shown, alerts, interval, options, color=use_color(options.color), **settings)

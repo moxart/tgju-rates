@@ -70,6 +70,10 @@ class RunConvertTest(unittest.TestCase):
     def test_unknown_code_is_an_error(self, _fetch):
         self.assertEqual(run_convert("2 xyz"), "No price for xyz.")
 
+    @mock.patch("tgju_rates.convert.fetch_live_prices", return_value={"price_eur": {"p": "0"}})
+    def test_zero_price_is_missing_not_a_division_by_zero(self, _fetch):
+        self.assertEqual(run_convert("2 toman eur"), "No price for eur.")
+
 
 if __name__ == "__main__":
     unittest.main()

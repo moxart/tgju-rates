@@ -2,7 +2,7 @@ import unittest
 from unittest import mock
 
 from tgju_rates.alerts import parse_alert
-from tgju_rates.app import LiveSession, Options, history_csv, saved_rates
+from tgju_rates.app import LiveSession, Options, history_csv, run_live, saved_rates
 from tgju_rates.history import History
 from tgju_rates.holdings import Holding
 
@@ -125,6 +125,16 @@ class LiveSessionAnimationTest(unittest.TestCase):
         frames, keys = self.run_session(fetch, "off")
         self.assertNotIn("48;5;34", frames[0])
         self.assertGreater(keys.waits[0], 1)
+
+
+class RunLivePipedTest(unittest.TestCase):
+    def test_piped_output_keeps_colour_but_does_not_animate(self):
+        sessions = []
+        record = mock.patch.object(LiveSession, "run", lambda session, draw, keys=None: sessions.append(session))
+        with mock.patch("tgju_rates.app.sys.stdout.isatty", return_value=False), record:
+            run_live([], [], [], 10, Options(animation="flash", color="always"))
+        self.assertTrue(sessions[0].color)
+        self.assertEqual(sessions[0].controls.animation, "off")
 
 
 @mock.patch("tgju_rates.app.notify")

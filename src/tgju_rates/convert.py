@@ -137,10 +137,13 @@ def conversion_json(conversion, results, prices, note=""):
 
 
 def live_prices(keys):
-    """{key: rial price} from the feed for the keys it has with a rial price."""
+    """{key: rial price} from the feed for the keys it has with a rial price.
+
+    A zero price is left out like a missing one, since converting into it would divide by zero.
+    """
     live = fetch_live_prices()
     prices = {key: parse_rial(live[key]["p"]) for key in keys if key in live}
-    return {key: price for key, price in prices.items() if price is not None}
+    return {key: price for key, price in prices.items() if price}
 
 
 def saved_prices(history, keys):
@@ -148,7 +151,7 @@ def saved_prices(history, keys):
     latest = history.latest() if history is not None else {}
     found = {key: latest[key] for key in keys if key in latest}
     oldest = min((stamp for stamp, _ in found.values()), default=None)
-    return {key: price for key, (_, price) in found.items()}, oldest
+    return {key: price for key, (_, price) in found.items() if price}, oldest
 
 
 def prices_for(keys, history):
