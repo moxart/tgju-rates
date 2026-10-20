@@ -24,6 +24,9 @@ All notable changes to this project are listed here. The format follows
   a link for reporting it.
 - The `--once` header shows when the prices were fetched.
 
+- The package is published on PyPI as `tgju-rates` (`pipx install tgju-rates`). Tagged releases upload
+  through trusted publishing.
+
 ### Changed
 
 - Requests ask for gzip, so each poll of the feed downloads about 26 KB instead of 176 KB.
