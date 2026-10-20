@@ -8,6 +8,9 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
+- `--serve`: a JSON API (`/v1/rates`, `/v1/rates/CODE`, `/v1/history/CODE`, `/v1/convert`, `/v1/jewelry`,
+  `/v1/health`) that polls the feed and records history. It listens on `127.0.0.1:8080` unless
+  `--host`/`--port` say otherwise.
 - Settings file (`~/.config/tgju-rates/config.ini`, or `--config PATH`) with defaults for the display,
   live-mode, alert and history options. `--doctor` checks it.
 - `--no-toman`, `--no-persian`, `--no-jalali` and `--no-dashboard`, to turn off a default set in the
@@ -20,6 +23,9 @@ All notable changes to this project are listed here. The format follows
 - `--debug`, which shows the traceback of an unexpected error. Without it the error is one line with
   a link for reporting it.
 - The `--once` header shows when the prices were fetched.
+
+- The package is published on PyPI as `tgju-rates` (`pipx install tgju-rates`). Tagged releases upload
+  through trusted publishing.
 
 ### Changed
 

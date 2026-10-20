@@ -121,19 +121,21 @@ def format_quote(result, toman=False, note=""):
     return "\n".join(lines)
 
 
-def quote_json(result, note=""):
+def quote_record(result, note=""):
     piece = result.piece
-    return json.dumps(
-        {
-            "weight_grams": piece.weight,
-            "gram_price_rial": result.gram_price,
-            "percents": {"wage": piece.wage, "profit": piece.profit, "tax": piece.tax},
-            "parts_rial": {"gold": result.gold, "wage": result.wage, "profit": result.profit, "tax": result.tax},
-            "total_rial": result.total,
-            "total_toman": rial_to_toman(result.total),
-            "note": note or None,
-        }
-    )
+    return {
+        "weight_grams": piece.weight,
+        "gram_price_rial": result.gram_price,
+        "percents": {"wage": piece.wage, "profit": piece.profit, "tax": piece.tax},
+        "parts_rial": {"gold": result.gold, "wage": result.wage, "profit": result.profit, "tax": result.tax},
+        "total_rial": result.total,
+        "total_toman": rial_to_toman(result.total),
+        "note": note or None,
+    }
+
+
+def quote_json(result, note=""):
+    return json.dumps(quote_record(result, note))
 
 
 def run_jewelry(text, history=None, toman=False, as_json=False):

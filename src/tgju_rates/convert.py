@@ -119,21 +119,22 @@ def whole(number):
     return int(number) if float(number).is_integer() else number
 
 
-def conversion_json(conversion, results, prices, note=""):
-    return json.dumps(
-        {
-            "amount": whole(conversion.amount),
-            "from": unit_label(conversion.source),
-            "results": {
-                unit_label(unit): round(value) if unit in MONEY_UNITS else value for unit, value in results.items()
-            },
-            "prices_rial": {
-                unit_label(unit): prices[unit] for unit in [conversion.source, *results] if unit not in MONEY_UNITS
-            },
-            "note": note or None,
+def conversion_record(conversion, results, prices, note=""):
+    return {
+        "amount": whole(conversion.amount),
+        "from": unit_label(conversion.source),
+        "results": {
+            unit_label(unit): round(value) if unit in MONEY_UNITS else value for unit, value in results.items()
         },
-        ensure_ascii=False,
-    )
+        "prices_rial": {
+            unit_label(unit): prices[unit] for unit in [conversion.source, *results] if unit not in MONEY_UNITS
+        },
+        "note": note or None,
+    }
+
+
+def conversion_json(conversion, results, prices, note=""):
+    return json.dumps(conversion_record(conversion, results, prices, note), ensure_ascii=False)
 
 
 def live_prices(keys):

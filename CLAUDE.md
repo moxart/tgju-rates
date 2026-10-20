@@ -14,6 +14,7 @@ PYTHONPATH=src python3 -m tgju_rates --hold usd=1200@2,450,000 [--holdings PATH]
 PYTHONPATH=src python3 -m tgju_rates --history usd [--days 7] [--db PATH] [--chart|--csv] [--jalali]   # saved prices (offline)
 PYTHONPATH=src python3 -m tgju_rates --market coin,gold,crypto [--watch usd,emami,btc]
 PYTHONPATH=src python3 -m tgju_rates --dashboard [--watch CODES] [--market coin,gold]   # one panel per market
+PYTHONPATH=src python3 -m tgju_rates --serve [--host 127.0.0.1] [--port 8080] [-i 10]   # JSON API
 PYTHONPATH=src python3 -m tgju_rates --convert "250 usd eur" | --jewelry "12.5g wage 18%" | --doctor | --completion bash
 PYTHONPATH=src python3 -m tgju_rates [--config PATH] [--color auto|always|never] [--debug]
 PYTHONPATH=src python3 -m unittest discover -s tests        # all tests (offline)
@@ -31,6 +32,8 @@ After `pip install .`, the `tgju-rates` console script runs `tgju_rates.cli:main
 - `markets.py`: `FEED_MARKETS` (`coin`/`gold`/`crypto` → `Instrument(key, code, name, persian)`), `INSTRUMENTS`, `KEY_BY_CODE`, `market_of`, `parse_markets`. Imports nothing from the package (currencies.py builds on it).
 - `convert.py`: `parse_conversion` → `Conversion`, `convert` (honours `UNIT_SIZE`), `prices_for`/`missing_prices` (feed prices, else `History.latest`; shared with `jewelry.py`), `run_convert`, `quick_conversion` (the live `c` line, from `LiveSession.rates`, no fetch).
 - `jewelry.py`: `parse_piece` → `Piece` (weight, wage/profit/tax percents; `DEFAULT_PROFIT` 7, `DEFAULT_TAX` 10), `quote` → `Quote` (gold, wage, profit = % of gold+wage, tax = % of wage+profit; each rounded to a whole toman so both columns add up), `format_quote`, `quote_json`, `run_jewelry` (price of `geram18` via `convert.prices_for`).
+- `api.py`: the `--serve` routes with no HTTP in them, so another server (FastAPI, auth, tiers) can wrap them later. `Api.handle(path, params)` → `(status, payload dict)`; routes run under `RateStore.lock`; `ApiError(status, message)` becomes `{"error": ...}`. `RateStore` holds the rates, the history (opened with `threads=True`) and `updated_at`/`error`/`failures`; `poll` fetches outside the lock, applies and records inside it. `stale` = no successful poll in `STALE_POLLS` intervals. Payloads reuse `rate_record`, `history_record`, `conversion_record`, `quote_record`.
+- `server.py`: `ThreadingHTTPServer` glue (`ApiHandler.do_GET`, JSON, `Access-Control-Allow-Origin: *`), `bind` (before the start-up fetch, so a taken port fails fast), `serve` (attaches `Api`, polls once, starts the `poll_forever` thread). `cli.run_server` loads every market through `load_rates`.
 - `chart.py`: `resample` (step prices into columns), `render_chart`, `daily_rows`/`daily_summary` (`last` keeps only the newest days).
 - `dates.py`: `to_jalali` (arithmetic Gregorian→Jalali), `format_date`, `format_stamp`. Every displayed date goes through these so `--jalali` applies; JSON and the CSV `time` column stay ISO.
 - `doctor.py`: `run_doctor` and its `check_*` functions, each returning `(status, message)` lines.

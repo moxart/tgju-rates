@@ -12,19 +12,25 @@ Live Iranian rial exchange rates from [tgju.org](https://www.tgju.org/currency) 
 - Price history saved to a local SQLite file, so sparklines survive restarts and past prices can be listed.
 - No dependencies. Only the Python standard library is used.
 
-![tgju-rates live view with a savings panel, price changes and trend sparklines](docs/screenshot.png)
+![tgju-rates live view with a savings panel, price changes and trend sparklines](https://raw.githubusercontent.com/moxart/tgju-rates/main/docs/screenshot.png)
 
 ## Installation
 
 Requires Python 3.9 or newer.
 
 ```sh
-git clone https://github.com/moxart/tgju-rates.git
-cd tgju-rates
-pip install .
+pipx install tgju-rates    # or: pip install tgju-rates
 ```
 
-On distributions that mark the system Python as externally managed (recent Ubuntu, Debian, Fedora), plain `pip install` refuses to run. Install with `pipx install .` instead, or inside a virtual environment.
+On distributions that mark the system Python as externally managed (recent Ubuntu, Debian, Fedora), plain `pip install` refuses to run. Use `pipx`, or a virtual environment.
+
+To install from a clone instead:
+
+```sh
+git clone https://github.com/moxart/tgju-rates.git
+cd tgju-rates
+pipx install .
+```
 
 You can also run it from the source tree without installing: `PYTHONPATH=src python3 -m tgju_rates`.
 
@@ -135,6 +141,30 @@ tgju-rates --jewelry "3.2g wage 15% tax 9%" --json
 
 Each part is shown in rial and toman. When the feed can't be reached, the last saved gold price is
 used and a note says so.
+
+### API server
+
+`--serve` runs a small JSON API with the same data, for a home dashboard, a bot or a script. It loads
+every market, reads the feed every `--interval` seconds and saves changed prices to the history file.
+
+```sh
+tgju-rates --serve                      # http://127.0.0.1:8080/v1/
+curl localhost:8080/v1/rates/usd
+curl "localhost:8080/v1/rates?market=coin,gold&unit=toman"
+curl "localhost:8080/v1/rates?codes=usd,eur,emami,btc"
+curl "localhost:8080/v1/history/usd?days=7"
+curl "localhost:8080/v1/convert?amount=250&from=usd&to=eur"
+curl "localhost:8080/v1/jewelry?weight=12.5&wage=18"
+curl localhost:8080/v1/health
+```
+
+Prices are whole numbers in rial, or toman with `unit=toman`. Each response about current prices has
+`updated` (when the feed was last read) and `stale` (true when that was more than three intervals
+ago). Errors come back as `{"error": "..."}` with status 400, 404 or 503.
+
+It listens on this computer only. `--host 0.0.0.0` opens it to your network; it has no
+authentication or HTTPS, so don't expose it to the internet as it is. `--port` changes the port.
+The prices belong to tgju.org, so check their terms before you share the API with others.
 
 ### Your savings
 
@@ -363,8 +393,8 @@ python -m unittest discover -s tests   # tests
 ruff check . && ruff format --check .  # lint and formatting
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the conventions and how releases are made, and
-[CHANGELOG.md](CHANGELOG.md) for what changed.
+See [CONTRIBUTING.md](https://github.com/moxart/tgju-rates/blob/main/CONTRIBUTING.md) for the conventions and how releases are made, and
+[CHANGELOG.md](https://github.com/moxart/tgju-rates/blob/main/CHANGELOG.md) for what changed.
 
 A currency the site adds later shows `-` as its name until it gets an entry in `ENGLISH_NAMES` in
 `currencies.py`.
@@ -376,4 +406,4 @@ keep the refresh interval reasonable.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/moxart/tgju-rates/blob/main/LICENSE)

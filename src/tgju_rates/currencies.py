@@ -66,6 +66,11 @@ def row_key(code):
     return "price_" + CODE_ALIASES.get(code, code)
 
 
+def parse_codes(text):
+    """Turn "usd,eur" into row keys, keeping the order and dropping duplicates and blanks."""
+    return list(dict.fromkeys(row_key(code) for code in text.split(",") if code.strip()))
+
+
 def display_code(key):
     if key in INSTRUMENTS:
         return INSTRUMENTS[key].code.upper()

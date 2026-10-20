@@ -36,11 +36,14 @@ class History:
         }
 
     @classmethod
-    def open(cls, path):
-        """Open (creating if needed) the history file. Raises OSError or sqlite3.Error."""
+    def open(cls, path, threads=False):
+        """Open (creating if needed) the history file. Raises OSError or sqlite3.Error.
+
+        With ``threads``, other threads may use it too; the caller makes sure they take turns.
+        """
         if str(path) != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
-        return cls(sqlite3.connect(str(path), timeout=LOCK_TIMEOUT))
+        return cls(sqlite3.connect(str(path), timeout=LOCK_TIMEOUT, check_same_thread=not threads))
 
     def close(self):
         self._db.close()

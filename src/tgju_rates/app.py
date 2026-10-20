@@ -127,6 +127,13 @@ def run_live(rates, shown, alerts, interval, options, history=None, holdings=(),
                 session.run(draw)
 
 
+def retry_delay(interval, failures):
+    """Seconds until the next poll: the interval, doubled for each failure in a row, up to a cap."""
+    if not failures:
+        return interval
+    return min(interval * 2**failures, max(interval, MAX_RETRY_SECONDS))
+
+
 def record_history(history, rates, now):
     """Save changed prices; returns an error message instead of raising, so a full disk doesn't stop polling."""
     try:
@@ -218,10 +225,7 @@ class LiveSession:
                 draw(self.frame(time.time()))
 
     def poll_delay(self):
-        """Seconds until the next poll: the interval, doubled for each failure in a row, up to a cap."""
-        if not self.failures:
-            return self.interval
-        return min(self.interval * 2**self.failures, max(self.interval, MAX_RETRY_SECONDS))
+        return retry_delay(self.interval, self.failures)
 
     def poll(self):
         now = self.updated_at = time.time()

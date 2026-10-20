@@ -45,5 +45,20 @@ Add a line under `[Unreleased]` in `CHANGELOG.md` for anything a user would noti
 2. Set `__version__` in `src/tgju_rates/__init__.py` to the same version.
 3. Commit, then tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
 
-The release workflow builds the wheel and source archive, checks that the tag matches `__version__`,
-and attaches both to a GitHub release.
+The release workflow (`.github/workflows/release.yml`) builds the wheel and source archive, checks that
+the tag matches `__version__`, publishes both to [PyPI](https://pypi.org/project/tgju-rates/) through
+trusted publishing, then attaches them to a GitHub release. A version can't be re-uploaded to PyPI, so
+a bad release needs a new version number.
+
+One-time PyPI setup (pypi.org → Your projects → Publishing → add a pending publisher):
+
+| Field | Value |
+| --- | --- |
+| PyPI project name | `tgju-rates` |
+| Owner | `moxart` |
+| Repository name | `tgju-rates` |
+| Workflow name | `release.yml` |
+| Environment name | `pypi` |
+
+Also create an environment called `pypi` under the repository's Settings → Environments (adding a
+required reviewer there gives a manual approval step before each upload).

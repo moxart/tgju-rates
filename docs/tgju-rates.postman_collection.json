@@ -1,0 +1,408 @@
+{
+  "info": {
+    "name": "tgju-rates API",
+    "description": "The JSON API from `tgju-rates --serve`. Start the server, then send any request. Change `baseUrl` under the collection's Variables if you use another --host or --port.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8080"
+    }
+  ],
+  "item": [
+    {
+      "name": "Index",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/v1",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1"
+          ],
+          "query": []
+        },
+        "description": "Version and the list of endpoints."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"response is JSON\", () => pm.response.to.be.json);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/v1/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "health"
+          ],
+          "query": []
+        },
+        "description": "Whether the feed was read recently (`stale`), the last error, and whether history is on."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"response is JSON\", () => pm.response.to.be.json);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rates",
+      "item": [
+        {
+          "name": "All rates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/rates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "rates"
+              ],
+              "query": []
+            },
+            "description": "Every currency, coin, gold and crypto price."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"response is JSON\", () => pm.response.to.be.json);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rates by market",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/rates?market=coin,gold&unit=toman",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "rates"
+              ],
+              "query": [
+                {
+                  "key": "market",
+                  "value": "coin,gold",
+                  "description": "currency, coin, gold, crypto or all"
+                },
+                {
+                  "key": "unit",
+                  "value": "toman",
+                  "description": "rial (default) or toman"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"response is JSON\", () => pm.response.to.be.json);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rates by codes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/rates?codes=usd,eur,emami,btc&unit=toman",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "rates"
+              ],
+              "query": [
+                {
+                  "key": "codes",
+                  "value": "usd,eur,emami,btc",
+                  "description": "comma-separated, in this order"
+                },
+                {
+                  "key": "unit",
+                  "value": "toman",
+                  "description": "rial (default) or toman"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"response is JSON\", () => pm.response.to.be.json);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "One rate",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/rates/usd?unit=toman",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "rates",
+                "usd"
+              ],
+              "query": [
+                {
+                  "key": "unit",
+                  "value": "toman",
+                  "description": "rial (default) or toman"
+                }
+              ]
+            },
+            "description": "Any code: usd, eur, emami, btc, gold18, ..."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"response is JSON\", () => pm.response.to.be.json);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown code (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/rates/nope",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "rates",
+                "nope"
+              ],
+              "query": []
+            },
+            "description": "Errors come back as {\"error\": \"...\"}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"response is JSON\", () => pm.response.to.be.json);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "History",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/v1/history/usd?days=7&unit=toman",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "history",
+            "usd"
+          ],
+          "query": [
+            {
+              "key": "days",
+              "value": "7",
+              "description": "how far back, up to 366 (default 1)"
+            },
+            {
+              "key": "unit",
+              "value": "toman",
+              "description": "rial (default) or toman"
+            }
+          ]
+        },
+        "description": "Saved price changes for one code, oldest first."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"response is JSON\", () => pm.response.to.be.json);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Convert",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/v1/convert?amount=250&from=usd&to=eur",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "convert"
+          ],
+          "query": [
+            {
+              "key": "amount",
+              "value": "250",
+              "description": ""
+            },
+            {
+              "key": "from",
+              "value": "usd",
+              "description": "a code, rial or toman"
+            },
+            {
+              "key": "to",
+              "value": "eur",
+              "description": "optional; without it you get rial and toman"
+            }
+          ]
+        },
+        "description": ""
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"response is JSON\", () => pm.response.to.be.json);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Jewelry",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/v1/jewelry?weight=12.5&wage=18&profit=7&tax=10",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "jewelry"
+          ],
+          "query": [
+            {
+              "key": "weight",
+              "value": "12.5",
+              "description": "grams of 18k gold"
+            },
+            {
+              "key": "wage",
+              "value": "18",
+              "description": "making charge %"
+            },
+            {
+              "key": "profit",
+              "value": "7",
+              "description": "seller's profit % (default 7)"
+            },
+            {
+              "key": "tax",
+              "value": "10",
+              "description": "VAT % (default 10)"
+            }
+          ]
+        },
+        "description": ""
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"response is JSON\", () => pm.response.to.be.json);"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
