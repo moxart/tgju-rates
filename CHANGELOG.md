@@ -6,6 +6,8 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-20
+
 ### Added
 
 - Settings file (`~/.config/tgju-rates/config.ini`, or `--config PATH`) with defaults for the display,
@@ -56,5 +58,6 @@ All notable changes to this project are listed here. The format follows
 - `--convert`, the `--jewelry` calculator, `--doctor` and shell completion.
 - Keys in live mode: select and open details, toman/rial, sort, filter, converter, animation, pause.
 
-[Unreleased]: https://github.com/moxart/tgju-rates/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/moxart/tgju-rates/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/moxart/tgju-rates/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/moxart/tgju-rates/releases/tag/v0.1.0
