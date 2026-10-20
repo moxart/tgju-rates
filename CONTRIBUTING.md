@@ -43,7 +43,10 @@ Add a line under `[Unreleased]` in `CHANGELOG.md` for anything a user would noti
 
 1. Move the `[Unreleased]` entries in `CHANGELOG.md` under a new version heading.
 2. Set `__version__` in `src/tgju_rates/__init__.py` to the same version.
-3. Commit, then tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+3. Commit, merge to `main`, then tag `main` and push the tag:
+   `git switch main && git pull && git tag v0.2.0 && git push origin v0.2.0`.
+
+The workflow refuses a tag whose commit isn't on `main`.
 
 The release workflow (`.github/workflows/release.yml`) builds the wheel and source archive, checks that
 the tag matches `__version__`, publishes both to [PyPI](https://pypi.org/project/tgju-rates/) through
