@@ -21,7 +21,7 @@ PYTHONPATH=src python3 -m unittest tests.test_screen        # one module
 ruff check . && ruff format --check .                       # lint/format (config in pyproject.toml, line length 120)
 ```
 
-After `pip install .`, the `tgju-rates` console script runs `tgju_rates.cli:main`. CI (`.github/workflows/ci.yml`) runs ruff, the tests on Python 3.9–3.13, and a wheel build. Pushing a `v*` tag runs `release.yml` (tag must equal `__version__`; attaches the wheel and sdist to a GitHub release, no PyPI). User-visible changes get a line under `[Unreleased]` in `CHANGELOG.md`.
+After `pip install .`, the `tgju-rates` console script runs `tgju_rates.cli:main`. CI (`.github/workflows/ci.yml`) runs ruff, the tests on Python 3.9–3.13, and a wheel build. Pushing a `v*` tag runs `release.yml` (tag must equal `__version__`; publishes the wheel and sdist to PyPI by trusted publishing, then attaches them to a GitHub release; only tags on `main` build). User-visible changes get a line under `[Unreleased]` in `CHANGELOG.md`.
 
 ## Module map (`src/tgju_rates/`)
 
